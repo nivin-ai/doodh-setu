@@ -1,18 +1,46 @@
 import type { Config } from 'tailwindcss';
+
+// Doodh Setu tokens: ajrakh indigo + marigold on milk-white.
 const config: Config = {
   content: ['./app/**/*.{ts,tsx}', './components/**/*.{ts,tsx}', './lib/**/*.{ts,tsx}'],
   theme: {
     extend: {
       colors: {
-        primary: { DEFAULT: '#1F5FA8', light: '#E6EEF8' },
-        ink: '#2C2C2A', muted: '#6B6A65', line: '#B9B7AE',
-        fill: '#F1EFE8', alt: '#FAFAF8',
-        good: { DEFAULT: '#2E7D4F', light: '#E3F2E8' },
-        warn: { DEFAULT: '#B26B00', light: '#FDF1DC' },
-        bad: { DEFAULT: '#B3261E', light: '#FCE8E6' },
-        console: '#1F3A5F',
+        primary: { DEFAULT: '#26347F', dark: '#1B2560', light: '#E9ECF8' },
+        marigold: { DEFAULT: '#F4B400', deep: '#C98A00', soft: '#FFF3CF' },
+        ink: '#171A26',
+        muted: '#5B6275',
+        line: '#DCE1EA',
+        fill: '#EEF1F6',
+        alt: '#F7F8FB',
+        milk: '#F3F5F9',
+        good: { DEFAULT: '#1F7A4D', light: '#E3F2E9' },
+        warn: { DEFAULT: '#8A5A00', light: '#FFF3CF' },
+        bad: { DEFAULT: '#B23A2E', light: '#FBE9E6' },
+        console: '#1B2560',
       },
-      fontFamily: { sans: ['var(--font-latin)', 'var(--font-gu)', 'var(--font-hi)', 'system-ui', 'sans-serif'] },
+      fontFamily: {
+        sans: ['"Mukta Vaani"', 'Mukta', 'system-ui', 'sans-serif'],
+        display: ['"Baloo Bhai 2"', '"Baloo 2"', '"Mukta Vaani"', 'system-ui', 'sans-serif'],
+      },
+      borderRadius: { sheet: '18px' },
+      keyframes: {
+        'view-in': { from: { opacity: '0', transform: 'translateY(6px)' }, to: { opacity: '1', transform: 'none' } },
+        'slide-in': { from: { opacity: '0', transform: 'translateX(24px)' }, to: { opacity: '1', transform: 'none' } },
+        'toast-in': { from: { opacity: '0', transform: 'translate(-50%, 12px)' }, to: { opacity: '1', transform: 'translate(-50%, 0)' } },
+        pop: { '0%': { transform: 'scale(.96)', opacity: '.6' }, '100%': { transform: 'scale(1)', opacity: '1' } },
+        eq: { '0%,100%': { transform: 'scaleY(.35)' }, '50%': { transform: 'scaleY(1)' } },
+        draw: { to: { strokeDashoffset: '0' } },
+        shimmer: { '100%': { transform: 'translateX(100%)' } },
+      },
+      animation: {
+        'view-in': 'view-in 240ms cubic-bezier(.2,.7,.2,1) both',
+        'slide-in': 'slide-in 260ms cubic-bezier(.2,.7,.2,1) both',
+        'toast-in': 'toast-in 220ms cubic-bezier(.2,.7,.2,1) both',
+        pop: 'pop 200ms ease-out both',
+        eq: 'eq 900ms ease-in-out infinite',
+        draw: 'draw 420ms ease-out 80ms forwards',
+      },
     },
   },
   plugins: [],

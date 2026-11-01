@@ -1,27 +1,40 @@
 'use client';
 import Link from 'next/link';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { speak, stopSpeaking, voiceHealth } from '@/lib/voice';
 import type { Lang } from '@/lib/i18n';
 import { useStore } from '@/lib/store';
 import { DEMO_DATES } from '@/lib/demo';
 
-type Tone = 'primary' | 'good' | 'warn' | 'bad' | 'neutral';
+type Tone = 'primary' | 'good' | 'warn' | 'bad' | 'neutral' | 'marigold';
 const TONES: Record<Tone, string> = {
-  primary: 'bg-primary-light text-primary border-primary',
-  good: 'bg-good-light text-good border-good',
-  warn: 'bg-warn-light text-warn border-warn',
-  bad: 'bg-bad-light text-bad border-bad',
-  neutral: 'bg-fill text-muted border-line',
+  primary: 'bg-primary-light text-primary',
+  good: 'bg-good-light text-good',
+  warn: 'bg-warn-light text-warn',
+  bad: 'bg-bad-light text-bad',
+  neutral: 'bg-fill text-muted',
+  marigold: 'bg-marigold text-ink',
 };
 
 export function Chip({ tone = 'neutral', children, className = '' }: { tone?: Tone; children: React.ReactNode; className?: string }) {
-  return <span className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-[11px] font-bold ${TONES[tone]} ${className}`}>{children}</span>;
+  return <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[12px] font-semibold leading-5 ${TONES[tone]} ${className}`}>{children}</span>;
 }
 
-export function PlayButton({ text, lang, size = 34 }: { text: string; lang: Lang; size?: number }) {
+// Animated equaliser bars: shown while audio plays or the mic listens.
+export function Waveform({ bars = 4, className = '', color = 'currentColor' }: { bars?: number; className?: string; color?: string }) {
+  return (
+    <span className={`inline-flex h-3.5 items-center gap-[2px] ${className}`} aria-hidden>
+      {Array.from({ length: bars }).map((_, i) => (
+        <span key={i} className="block h-full w-[3px] origin-center rounded-full" style={{ background: color, animation: `eq 900ms ease-in-out ${i * 120}ms infinite` }} />
+      ))}
+    </span>
+  );
+}
+
+export function PlayButton({ text, lang, size = 36, tone = 'primary' }: { text: string; lang: Lang; size?: number; tone?: 'primary' | 'onMarigold' }) {
   const [playing, setPlaying] = useState(false);
-  const label = playing ? 'Stop' : 'Listen';
+  const label = playing ? 'Stop listening' : 'Listen';
+  const cls = tone === 'onMarigold' ? 'bg-ink text-marigold' : 'bg-primary-light text-primary hover:bg-[#DCE1F4]';
   return (
     <button
       aria-label={label}
@@ -32,58 +45,90 @@ export function PlayButton({ text, lang, size = 34 }: { text: string; lang: Lang
         setPlaying(true);
         await speak(text, lang, () => setPlaying(false));
       }}
-      className={`flex shrink-0 items-center justify-center rounded-full border border-primary bg-primary-light text-primary ${playing ? 'listening' : ''}`}
+      className={`flex shrink-0 items-center justify-center rounded-full transition ${cls}`}
       style={{ width: size, height: size }}
     >
-      {playing ? (
-        <svg width="12" height="12" viewBox="0 0 12 12"><rect x="1" y="1" width="3.5" height="10" fill="currentColor" /><rect x="7.5" y="1" width="3.5" height="10" fill="currentColor" /></svg>
-      ) : (
-        <svg width="12" height="12" viewBox="0 0 12 12"><path d="M2 1 L11 6 L2 11 Z" fill="currentColor" /></svg>
-      )}
+      {playing ? <Waveform /> : <svg width="13" height="13" viewBox="0 0 12 12" aria-hidden><path d="M2.5 1.2 11 6l-8.5 4.8Z" fill="currentColor" /></svg>}
     </button>
   );
+}
+
+// Counts from the previous value to the new one when a figure changes.
+export function useCountUp(target: number, ms = 550) {
+  const [v, setV] = useState(target);
+  const from = useRef(target);
+  useEffect(() => {
+    const start = performance.now();
+    const a = from.current;
+    if (a === target || window.matchMedia('(prefers-reduced-motion: reduce)').matches) { setV(target); from.current = target; return; }
+    let raf = 0;
+    const step = (t: number) => {
+      const p = Math.min(1, (t - start) / ms);
+      const e = 1 - Math.pow(1 - p, 3);
+      setV(a + (target - a) * e);
+      if (p < 1) raf = requestAnimationFrame(step); else from.current = target;
+    };
+    raf = requestAnimationFrame(step);
+    return () => { cancelAnimationFrame(raf); from.current = target; };
+  }, [target, ms]);
+  return v;
+}
+
+export function Count({ value, format }: { value: number; format: (n: number) => string }) {
+  const v = useCountUp(value);
+  return <span className="num">{format(v)}</span>;
 }
 
 export function VoiceBadge() {
   const [g, setG] = useState<boolean | null>(null);
   useEffect(() => { voiceHealth().then((h) => setG(h.gnani)); }, []);
   if (g === null) return null;
-  return <Chip tone={g ? 'good' : 'warn'}>{g ? 'Voice: Gnani.ai' : 'Voice: browser fallback'}</Chip>;
+  return <Chip tone={g ? 'good' : 'warn'}>{g ? 'Voice by Gnani.ai' : 'Browser voice (no Gnani key)'}</Chip>;
 }
 
 export function DemoBar() {
   const demoDate = useStore((s) => s.demoDate);
   return (
-    <div className="flex flex-wrap items-center gap-2 border-b border-line bg-[#FFFBF2] px-4 py-1.5 text-xs text-muted">
-      <Link href="/" className="font-bold text-primary">← Demo home</Link>
-      <span>Demo date: <b className="text-ink">{DEMO_DATES[demoDate].label}</b></span>
-      <span>Synthetic data. Not real Amul data.</span>
+    <div className="flex flex-wrap items-center gap-x-4 gap-y-1 border-b border-line bg-white px-4 py-1.5 text-[13px] text-muted">
+      <Link href="/" className="font-semibold text-primary hover:underline">Demo home</Link>
+      <span>Demo date <b className="font-semibold text-ink">{DEMO_DATES[demoDate].label}</b></span>
+      <span className="hidden sm:inline">Synthetic data, not real Amul data</span>
       <span className="ml-auto"><VoiceBadge /></span>
     </div>
   );
 }
 
-export function ConsoleShell({ title, menu, active, onSelect, right, children }: {
-  title: string; menu: { id: string; label: string; badge?: number }[]; active: string; onSelect: (id: string) => void; right?: React.ReactNode; children: React.ReactNode;
+export function ConsoleShell({ title, place, menu, active, onSelect, right, children }: {
+  title: string; place?: string; menu: { id: string; label: string; badge?: number }[]; active: string; onSelect: (id: string) => void; right?: React.ReactNode; children: React.ReactNode;
 }) {
   return (
-    <div className="min-h-screen">
+    <div className="min-h-screen bg-milk">
       <DemoBar />
-      <header className="flex items-center gap-4 bg-console px-5 py-3 text-white">
-        <h1 className="text-[15px] font-bold">{title}</h1>
+      <header className="flex items-center gap-4 bg-console px-6 py-3.5 text-white">
+        <div className="flex items-baseline gap-3">
+          <span className="font-display text-[20px] font-bold leading-none tracking-tight">Doodh Setu</span>
+          <span className="text-[15px] text-white/75">{title}{place ? <span className="text-white/55">, {place}</span> : null}</span>
+        </div>
         <div className="ml-auto flex items-center gap-3 text-sm">{right}</div>
       </header>
       <div className="flex">
-        <nav className="min-h-[calc(100vh-90px)] w-[220px] shrink-0 border-r border-line bg-alt p-3">
-          {menu.map((m) => (
-            <button key={m.id} onClick={() => onSelect(m.id)}
-              className={`mb-1 flex w-full items-center justify-between rounded-md px-3 py-2 text-left text-sm ${active === m.id ? 'border border-primary bg-primary-light font-bold text-primary' : 'text-ink hover:bg-fill'}`}>
-              {m.label}
-              {m.badge ? <span className="rounded-full bg-warn px-2 text-[11px] font-bold text-white">{m.badge}</span> : null}
-            </button>
-          ))}
+        <nav className="sticky top-0 hidden h-[calc(100vh-88px)] w-[228px] shrink-0 border-r border-line bg-white px-3 py-4 md:block" aria-label="Sections">
+          {menu.map((m) => {
+            const on = active === m.id;
+            return (
+              <button key={m.id} onClick={() => onSelect(m.id)} aria-current={on ? 'page' : undefined}
+                className={`relative mb-0.5 flex w-full items-center justify-between rounded-lg py-2 pl-4 pr-3 text-left text-[15px] transition-colors ${on ? 'bg-primary-light font-semibold text-primary' : 'text-ink hover:bg-alt'}`}>
+                <span className={`absolute left-0 top-1.5 h-[calc(100%-12px)] w-[3px] rounded-full bg-primary transition-transform duration-200 ${on ? 'scale-y-100' : 'scale-y-0'}`} />
+                {m.label}
+                {m.badge ? <span className="min-w-[22px] rounded-full bg-marigold px-1.5 text-center text-[12px] font-bold text-ink">{m.badge}</span> : null}
+              </button>
+            );
+          })}
         </nav>
-        <main className="min-w-0 flex-1 p-6">{children}</main>
+        <div className="sticky top-0 z-10 w-full overflow-x-auto border-b border-line bg-white px-3 py-2 md:hidden">
+          <div className="flex gap-1">{menu.map((m) => <button key={m.id} onClick={() => onSelect(m.id)} className={`shrink-0 rounded-full px-3 py-1 text-sm ${active === m.id ? 'bg-primary text-white' : 'bg-fill'}`}>{m.label}</button>)}</div>
+        </div>
+        <main key={active} className="min-w-0 flex-1 animate-view-in px-6 py-7 lg:px-10">{children}</main>
       </div>
     </div>
   );
@@ -92,23 +137,36 @@ export function ConsoleShell({ title, menu, active, onSelect, right, children }:
 export function Stat({ label, value, sub, tone }: { label: string; value: React.ReactNode; sub?: React.ReactNode; tone?: 'good' | 'warn' | 'bad' }) {
   const c = tone === 'good' ? 'text-good' : tone === 'warn' ? 'text-warn' : tone === 'bad' ? 'text-bad' : 'text-ink';
   return (
-    <div className="card p-4">
+    <div className="rounded-xl border border-line bg-white px-4 py-3.5">
       <div className="label">{label}</div>
-      <div className={`mt-1 text-2xl font-bold ${c}`}>{value}</div>
-      {sub ? <div className="mt-1 text-xs text-muted">{sub}</div> : null}
+      <div key={String(value)} className={`num mt-0.5 animate-pop text-[26px] font-bold leading-tight ${c}`}>{value}</div>
+      {sub ? <div className="mt-0.5 text-[13px] text-muted">{sub}</div> : null}
     </div>
   );
 }
 
 export function PageTitle({ title, sub, chip }: { title: string; sub?: string; chip?: React.ReactNode }) {
   return (
-    <div className="mb-5">
-      <div className="flex flex-wrap items-center gap-3"><h2 className="text-xl font-bold">{title}</h2>{chip}</div>
-      {sub ? <p className="mt-1 text-sm text-muted">{sub}</p> : null}
+    <div className="mb-6 max-w-[860px]">
+      <div className="flex flex-wrap items-center gap-3"><h2 className="text-[26px] font-bold leading-tight tracking-tight text-ink">{title}</h2>{chip}</div>
+      {sub ? <p className="mt-1.5 text-[15px] leading-relaxed text-muted">{sub}</p> : null}
     </div>
   );
 }
 
 export function Note({ children }: { children: React.ReactNode }) {
-  return <p className="mt-2 text-xs italic text-muted">{children}</p>;
+  return <p className="mt-2 text-[13px] leading-relaxed text-muted">{children}</p>;
 }
+
+export function Segmented<T extends string>({ options, value, onChange }: { options: { id: T; label: string }[]; value: T; onChange: (v: T) => void }) {
+  return (
+    <div className="inline-flex rounded-full border border-line bg-white p-0.5">
+      {options.map((o) => (
+        <button key={o.id} onClick={() => onChange(o.id)} aria-pressed={value === o.id}
+          className={`rounded-full px-3.5 py-1 text-sm transition-colors ${value === o.id ? 'bg-primary font-semibold text-white' : 'text-ink hover:bg-alt'}`}>{o.label}</button>
+      ))}
+    </div>
+  );
+}
+
+export const CHART = { indigo: '#26347F', indigoSoft: '#B9C2E6', marigold: '#F4B400', marigoldDeep: '#C98A00', green: '#1F7A4D', red: '#B23A2E', grey: '#C3C9D6', grid: '#E8EBF1', temp: '#C2552E' };

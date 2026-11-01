@@ -1,11 +1,12 @@
 'use client';
-import { useMemo, useState } from 'react';
+import { Fragment, useMemo, useState } from 'react';
 import { Bar, BarChart, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { useStore, activePremium, type AppStatus } from '@/lib/store';
 import { DEMO_DATES, FARMER } from '@/lib/demo';
 import { monthKeysUpTo, monthSummary } from '@/lib/farmer';
 import { fmtMonth, inr, MONTHS } from '@/lib/util';
-import { Chip, ConsoleShell, Note, PageTitle, Stat } from './ui';
+import { CHART, Chip, ConsoleShell, Note, PageTitle, Stat } from './ui';
+import { IconBack, IconCheck, IconChevron } from './icons';
 
 const LENDER = 'Gramin Partner Bank (demo)';
 const SEEDED = [
@@ -24,7 +25,7 @@ export default function LenderApp() {
   const newCount = ownCase && ownCase.status === 'submitted' ? 1 : 0;
   const menu = [{ id: 'cases', label: 'Cases', badge: newCount }, { id: 'products', label: 'Products' }, { id: 'audit', label: 'Audit trail' }];
   return (
-    <ConsoleShell title={`DairyFin PartnerDesk | ${LENDER}`} menu={menu} active={view} onSelect={(v) => { setView(v); setOpen(null); }} right={<span>Anita (case officer)</span>}>
+    <ConsoleShell title="DairyFin PartnerDesk" place={LENDER} menu={menu} active={view} onSelect={(v) => { setView(v); setOpen(null); }} right={<span className="rounded-full bg-white/10 px-3 py-1">Anita, case officer</span>}>
       {view === 'cases' ? (open ? <CaseDetail refId={open} back={() => setOpen(null)} /> : <Cases onOpen={setOpen} />) : view === 'products' ? <Products /> : <Audit />}
     </ConsoleShell>
   );
@@ -44,8 +45,8 @@ function Cases({ onOpen }: { onOpen: (r: string) => void }) {
       <table className="tbl card w-full overflow-hidden">
         <thead><tr><th>Reference</th><th>Applicant</th><th>Product</th><th>Amount</th><th>Status</th><th>Updated</th></tr></thead>
         <tbody>{rows.map((r) => (
-          <tr key={r.ref} className="cursor-pointer hover:bg-alt" onClick={() => onOpen(r.ref)}>
-            <td className="font-bold text-primary">{r.ref}</td><td>{r.farmer}</td><td>{r.product}</td><td>{inr(r.amount)}</td><td><Chip tone={TONE[r.status]}>{LABEL[r.status]}</Chip></td><td>{r.updated}</td></tr>
+          <tr key={r.ref} className="group cursor-pointer hover:bg-primary-light" onClick={() => onOpen(r.ref)}>
+            <td className="font-bold text-primary">{r.ref}</td><td>{r.farmer}</td><td>{r.product}</td><td className="num">{inr(r.amount)}</td><td><Chip tone={TONE[r.status]}>{LABEL[r.status]}</Chip></td><td className="whitespace-nowrap">{r.updated}<IconChevron size={16} className="ml-2 inline text-primary opacity-0 transition-opacity group-hover:opacity-100" /></td></tr>
         ))}</tbody>
       </table>
     </div>
@@ -66,7 +67,7 @@ function CaseDetail({ refId, back }: { refId: string; back: () => void }) {
   }, [today, premium?.rate]); // eslint-disable-line react-hooks/exhaustive-deps
   if (!a || a.ref !== refId) {
     const r = SEEDED.find((x) => x.ref === refId);
-    return <div><button className="mb-3 text-sm font-bold text-primary" onClick={back}>‹ All cases</button><PageTitle title={`Case ${refId}`} chip={r ? <Chip tone={TONE[r.status]}>{LABEL[r.status]}</Chip> : undefined} /><div className="card p-6 text-muted">Background demo case. Open {FARMER.first}&apos;s case to try the full flow.</div></div>;
+    return <div><button className="mb-3 flex items-center gap-1 text-sm font-semibold text-primary hover:underline" onClick={back}><IconBack size={16} />All cases</button><PageTitle title={`Case ${refId}`} chip={r ? <Chip tone={TONE[r.status]}>{LABEL[r.status]}</Chip> : undefined} /><div className="rounded-sheet border border-dashed border-line p-8 text-muted">Background demo case. Open {FARMER.first}&apos;s case to try the full flow.</div></div>;
   }
   const consent = s.consents.find((c) => c.id === a.consentId);
   const active = consent?.status === 'active';
@@ -76,26 +77,26 @@ function CaseDetail({ refId, back }: { refId: string; back: () => void }) {
   const docName = { id: 'Identity proof', bank: 'Bank account details', quote: 'Cattle purchase quote' };
   return (
     <div>
-      <button className="mb-3 text-sm font-bold text-primary" onClick={back}>‹ All cases</button>
-      <PageTitle title={`Case ${a.ref} | ${a.product} ${inr(a.amount)}`} chip={<Chip tone={TONE[a.status]}>{LABEL[a.status]}</Chip>} sub={`${FARMER.name} · member ${FARMER.memberId} · ${FARMER.society} · ${a.tenure} months at ${a.rate}%`} />
+      <button className="mb-3 flex items-center gap-1 text-sm font-semibold text-primary hover:underline" onClick={back}><IconBack size={16} />All cases</button>
+      <PageTitle title={`Case ${a.ref} | ${a.product} ${inr(a.amount)}`} chip={<Chip tone={TONE[a.status]}>{LABEL[a.status]}</Chip>} sub={`${FARMER.name}, member ${FARMER.memberId}, ${FARMER.society}. ${a.tenure} months at ${a.rate}%.`} />
       <div className="grid gap-4 xl:grid-cols-2">
         <div className="card p-4">
           <div className="flex items-center justify-between"><span className="label">Consent</span><Chip tone={active ? 'good' : 'bad'}>{active ? 'Active' : 'Withdrawn'}</Chip></div>
-          {consent ? <ul className="mt-2 space-y-1 text-sm"><li>ID: {consent.id}</li><li>Recipient: {consent.recipient}</li><li>Purpose: {consent.purpose}</li><li>Data: {consent.scope}</li><li>Period: {consent.period}</li><li>Granted: {new Date(consent.grantedAt).toLocaleString('en-IN')}</li></ul> : <p className="text-sm text-muted">No consent on record.</p>}
+          {consent ? <dl className="mt-2 grid grid-cols-[100px_1fr] gap-x-3 gap-y-1.5 text-sm">{([['ID', consent.id], ['Recipient', consent.recipient], ['Purpose', consent.purpose], ['Data', consent.scope], ['Period', consent.period], ['Granted', new Date(consent.grantedAt).toLocaleString('en-IN')]] as const).map(([k, v]) => <Fragment key={k}><dt className="text-muted">{k}</dt><dd>{v}</dd></Fragment>)}</dl> : <p className="text-sm text-muted">No consent on record.</p>}
         </div>
         <div className="card p-4">
           <div className="flex items-center justify-between"><span className="label">Income evidence</span><Chip tone="warn">Simulated</Chip></div>
           {active ? (<>
-            <div className="mt-1 font-bold">Average net milk payments: {inr(avg)} / month (last 6 months)</div>
-            <div className="text-sm">Coverage: {months.length} of 12 months · Lowest month: {inr(lowest.total)} ({fmtMonth(lowest.key)})</div>
-            <div className="mt-2 h-36"><ResponsiveContainer><BarChart data={data}><XAxis dataKey="m" fontSize={10} /><YAxis hide /><Tooltip formatter={(v: number) => inr(v)} />
-              <Bar dataKey="v">{data.map((d, i) => <Cell key={i} fill={d.low ? '#B26B00' : '#1F5FA8'} />)}</Bar></BarChart></ResponsiveContainer></div>
+            <div className="mt-1 text-sm text-muted">Average net milk payments, last 6 months</div><div className="num font-display text-[28px] font-bold leading-tight">{inr(avg)} <span className="text-[15px] font-semibold text-muted">per month</span></div>
+            <div className="text-sm">Coverage {months.length} of 12 months. Lowest month {inr(lowest.total)} ({fmtMonth(lowest.key)}).</div>
+            <div className="mt-2 h-36"><ResponsiveContainer><BarChart data={data}><XAxis dataKey="m" fontSize={10} tickLine={false} axisLine={false} /><YAxis hide /><Tooltip cursor={{ fill: '#F3F5F9' }} formatter={(v: number) => inr(v)} />
+              <Bar dataKey="v" radius={[4, 4, 0, 0]}>{data.map((d, i) => <Cell key={i} fill={d.low ? CHART.marigold : CHART.indigo} />)}</Bar></BarChart></ResponsiveContainer></div>
           </>) : <p className="mt-2 text-sm text-bad">Consent withdrawn. Evidence is hidden.</p>}
         </div>
       </div>
       <div className="card mt-4 p-4">
         <div className="label">Documents</div>
-        <ul className="mt-2 space-y-1 text-sm">{a.docs.map((d) => <li key={d.id} className="flex justify-between"><span>{docName[d.id]}</span><span className={d.status === 'received' ? 'font-bold text-good' : d.status === 'requested' ? 'font-bold text-warn' : 'text-muted'}>{d.status}</span></li>)}</ul>
+        <ul className="mt-2 divide-y divide-[#E8EBF1] text-sm">{a.docs.map((d) => <li key={d.id} className="flex items-center justify-between py-2"><span>{docName[d.id]}</span><span key={d.status} className="animate-pop">{d.status === 'received' ? <Chip tone="good"><IconCheck size={13} />Received</Chip> : d.status === 'requested' ? <Chip tone="warn">Requested</Chip> : <Chip>Missing</Chip>}</span></li>)}</ul>
       </div>
       <Note>Not shown to lenders: animal health records, signals, messages, voice data (BR-25). Final terms are recorded only after the bank&apos;s own sanction process (BR-18).</Note>
       {!['approved', 'declined', 'withdrawn'].includes(a.status) ? (
@@ -105,7 +106,7 @@ function CaseDetail({ refId, back }: { refId: string; back: () => void }) {
           <input className="input max-w-sm" placeholder="Note (required)" value={note} onChange={(e) => setNote(e.target.value)} />
           <button className="btn-primary" disabled={!note.trim() || !active} onClick={() => { s.setAppStatus(next, note); setNote(''); }}>Update status</button>
         </div>
-      ) : <p className="mt-4 text-sm">Case closed: <b>{LABEL[a.status]}</b>.</p>}
+      ) : <div className="mt-4 inline-flex animate-pop items-center gap-2 rounded-full bg-fill px-4 py-2 text-sm">Case closed: <b>{LABEL[a.status]}</b></div>}
     </div>
   );
 }
@@ -127,7 +128,7 @@ function Audit() {
   return (
     <div>
       <PageTitle title="Audit trail" sub="Consent, access and status events." />
-      <div className="card p-4"><ul className="space-y-1 text-sm">{s.audit.filter((x) => /consent|application|DF-|Requested|Uploaded|Set /.test(x.action)).map((x, i) => <li key={i}><span className="text-muted">{new Date(x.at).toLocaleString('en-IN')}</span> · <b>{x.actor}</b>: {x.action}</li>)}</ul>
+      <div className="card p-4"><ul className="divide-y divide-[#E8EBF1] text-[13px]">{s.audit.filter((x) => /consent|application|DF-|Requested|Uploaded|Set /.test(x.action)).map((x, i) => <li key={i} className="grid grid-cols-[150px_1fr] gap-3 py-1.5"><span className="num text-muted">{new Date(x.at).toLocaleString('en-IN')}</span><span><b className="font-semibold">{x.actor}</b>: {x.action}</span></li>)}</ul>
         {s.audit.length === 0 ? <p className="text-muted">No events yet.</p> : null}</div>
     </div>
   );

@@ -4,11 +4,12 @@ import { Bar, BarChart, Cell, ResponsiveContainer, XAxis, YAxis, Tooltip, LabelL
 import { useStore, activePremium, type AppStatus } from '@/lib/store';
 import { DEMO_DATES, FARMER } from '@/lib/demo';
 import { LANGS, SIGNAL_NEED, SIGNAL_TITLE, signalMessage, t, type Lang } from '@/lib/i18n';
-import { dayTotals, explainChange, monthKeysUpTo, monthSummary, SESSIONS, worthToFarmer, type MonthSummary } from '@/lib/farmer';
+import { dayTotals, explainChange, monthKeysUpTo, monthSummary, worthToFarmer, type MonthSummary } from '@/lib/farmer';
 import { answer } from '@/lib/ask';
 import { browserRecognition, recordWav, speak, transcribe, voiceHealth, type Recorder } from '@/lib/voice';
 import { fmtMonth, inr, MONTHS } from '@/lib/util';
-import { Chip, PlayButton } from './ui';
+import { Chip, Count, PlayButton, Segmented, Waveform, CHART } from './ui';
+import { IconBack, IconBank, IconCheck, IconChevron, IconHome, IconMic, IconNotice, IconPhone, IconRupee, IconSend, IconUser } from './icons';
 
 type Tab = 'home' | 'earnings' | 'signals' | 'finance' | 'ask';
 type Sub = null | 'signal' | 'why' | 'income' | 'afford' | 'products' | 'consent' | 'apply' | 'tracker' | 'profile';
@@ -59,21 +60,29 @@ export default function FarmerApp() {
   const published = s.incentive.status === 'published';
 
   const ctx = { s, lang, T, today, premium, months, worth, published, go, setSub, sub, flash, loan, setLoan, whyMonth, setWhyMonth, monthKeys, complete };
+  const TABS: { id: Tab; Icon: (p: { size?: number }) => JSX.Element }[] = [
+    { id: 'home', Icon: IconHome }, { id: 'earnings', Icon: IconRupee }, { id: 'signals', Icon: IconNotice }, { id: 'finance', Icon: IconBank }, { id: 'ask', Icon: IconMic },
+  ];
+  const tabIndex = TABS.findIndex((x) => x.id === tab);
+  const viewKey = `${tab}-${sub ?? 'root'}-${lang}`;
   return (
     <F.Provider value={ctx}>
-    <div className="mx-auto min-h-screen max-w-[430px] bg-white shadow-sm sm:my-4 sm:min-h-[860px] sm:rounded-[28px] sm:border-2 sm:border-ink">
-      <header className="sticky top-0 z-10 flex items-center gap-2 border-b border-line bg-alt px-4 py-3 sm:rounded-t-[26px]">
-        {sub ? <button aria-label={T('back')} className="px-1 text-xl font-bold" onClick={() => setSub(null)}>‹</button> : null}
-        <div className="flex-1 truncate text-[17px] font-bold">{sub === 'profile' ? T('profile') : T('appName')}</div>
-        <div className="flex overflow-hidden rounded-full border border-line text-[11px] font-bold">
-          {LANGS.map((l) => (
-            <button key={l.id} onClick={() => s.set({ lang: l.id })} className={`px-2 py-1 ${lang === l.id ? 'bg-primary text-white' : 'bg-white text-ink'}`}>{l.id.toUpperCase()}</button>
-          ))}
+    <div className="relative mx-auto min-h-screen max-w-[430px] overflow-hidden bg-milk sm:my-5 sm:min-h-[880px] sm:rounded-[34px] sm:border-[10px] sm:border-[#11152A] sm:shadow-[0_30px_60px_-30px_rgba(27,37,96,.45)]">
+      <header className="sticky top-0 z-20 bg-console text-white">
+        <div className="flex items-center gap-2 px-4 pb-3 pt-3.5">
+          {sub ? <button aria-label={T('back')} className="-ml-1 flex h-9 w-9 items-center justify-center rounded-full hover:bg-white/10" onClick={() => setSub(null)}><IconBack /></button> : null}
+          <div className="flex-1 truncate font-display text-[21px] font-bold leading-none">{sub === 'profile' ? T('profile') : T('appName')}</div>
+          <div className="flex rounded-full bg-white/10 p-0.5 text-[12px] font-semibold" role="group" aria-label={T('language')}>
+            {LANGS.map((l) => (
+              <button key={l.id} onClick={() => s.set({ lang: l.id })} aria-pressed={lang === l.id}
+                className={`rounded-full px-2.5 py-1 transition-colors ${lang === l.id ? 'bg-marigold text-ink' : 'text-white/80 hover:text-white'}`}>{l.id === 'gu' ? 'ગુ' : l.id === 'hi' ? 'हि' : 'En'}</button>
+            ))}
+          </div>
+          <button aria-label={T('profile')} onClick={() => setSub('profile')} className="flex h-9 w-9 items-center justify-center rounded-full bg-white/10 hover:bg-white/20"><IconUser /></button>
         </div>
-        <button aria-label={T('profile')} onClick={() => setSub('profile')} className="flex h-8 w-8 items-center justify-center rounded-full border border-line bg-white text-sm">👤</button>
       </header>
 
-      <div className="indic px-4 pb-28 pt-4 text-[17px]">
+      <div key={viewKey} className={`indic px-4 pb-32 pt-4 text-[17px] ${sub ? 'animate-slide-in' : 'animate-view-in'}`}>
         {sub === 'profile' ? <Profile /> :
           tab === 'home' ? <Home /> :
           tab === 'earnings' ? (sub === 'why' ? <Why /> : <Earnings />) :
@@ -82,23 +91,26 @@ export default function FarmerApp() {
           <Ask />}
       </div>
 
-      {toast ? <div className="fixed bottom-24 left-1/2 z-30 w-[90%] max-w-[380px] -translate-x-1/2 rounded-xl bg-ink px-4 py-3 text-sm text-white shadow-lg">{toast}</div> : null}
+      {toast ? <div role="status" className="fixed bottom-24 left-1/2 z-30 flex w-[90%] max-w-[380px] -translate-x-1/2 animate-toast-in items-center gap-2 rounded-2xl bg-ink px-4 py-3 text-[15px] text-white shadow-lg"><IconCheck size={18} className="text-marigold" />{toast}</div> : null}
 
       {tab !== 'ask' && !sub ? (
-        <button aria-label={T('ask')} onClick={() => go('ask')} className="fixed bottom-24 z-20 flex h-14 w-14 items-center justify-center rounded-full bg-primary text-2xl text-white shadow-lg sm:absolute" style={{ right: 'max(16px, calc(50% - 199px))' }}>🎤</button>
+        <button aria-label={T('ask')} onClick={() => go('ask')} className="fixed bottom-[86px] z-20 flex h-14 w-14 items-center justify-center rounded-full bg-marigold text-ink shadow-[0_8px_20px_-6px_rgba(201,138,0,.7)] transition active:scale-95 sm:absolute" style={{ right: 'max(16px, calc(50% - 195px))' }}><IconMic size={24} /></button>
       ) : null}
 
-      <nav className="fixed bottom-0 left-1/2 z-20 grid w-full max-w-[430px] -translate-x-1/2 grid-cols-5 border-t border-line bg-alt sm:rounded-b-[26px]">
-        {(['home', 'earnings', 'signals', 'finance', 'ask'] as Tab[]).map((k) => {
-          const icon = { home: '🏠', earnings: '₹', signals: '📣', finance: '🏦', ask: '🎤' }[k];
-          const dot = k === 'signals' && published && !s.farmer.heard;
-          return (
-            <button key={k} onClick={() => go(k)} className={`relative flex flex-col items-center gap-0.5 py-2 text-[11px] ${tab === k ? 'font-bold text-primary' : 'text-muted'}`}>
-              <span className="text-lg">{icon}</span>{T(k)}
-              {dot ? <span className="absolute right-[30%] top-1.5 h-2.5 w-2.5 rounded-full bg-warn" /> : null}
-            </button>
-          );
-        })}
+      <nav className="fixed bottom-0 left-1/2 z-20 w-full max-w-[430px] -translate-x-1/2 border-t border-line bg-white/95 pb-[env(safe-area-inset-bottom)] backdrop-blur sm:absolute sm:max-w-none" aria-label="Main">
+        <div className="relative grid grid-cols-5">
+          <span className="absolute top-0 h-[3px] w-[20%] rounded-b-full bg-primary transition-transform duration-300 ease-out" style={{ transform: `translateX(${tabIndex * 100}%)` }} />
+          {TABS.map(({ id: k, Icon }) => {
+            const dot = k === 'signals' && published && !s.farmer.heard;
+            const on = tab === k;
+            return (
+              <button key={k} onClick={() => go(k)} aria-current={on ? 'page' : undefined} className={`relative flex flex-col items-center gap-0.5 pb-2 pt-2.5 text-[12px] transition-colors ${on ? 'font-semibold text-primary' : 'text-muted'}`}>
+                <Icon size={22} />{T(k)}
+                {dot ? <span className="absolute right-[28%] top-2 h-2.5 w-2.5 rounded-full bg-marigold ring-2 ring-white" /> : null}
+              </button>
+            );
+          })}
+        </div>
       </nav>
     </div>
     </F.Provider>
@@ -107,94 +119,129 @@ export default function FarmerApp() {
 
 // ---------------- Home ----------------
 function Home() {
-  const { s, lang, T, today, premium, months, worth, published, go, setSub, flash, loan, setLoan, whyMonth, setWhyMonth, monthKeys, complete } = useF();
+  const { s, lang, T, today, premium, worth, published, go, monthKeys } = useF();
   const d = dayTotals(today, premium);
   const curKey = today.slice(0, 7);
   const cur = monthSummary(curKey, premium, today);
   const day = Number(today.slice(8, 10));
   const prevKey = monthKeys[monthKeys.length - 2];
-  const prevSame = SESSIONS.filter((x) => x.date.startsWith(prevKey) && Number(x.date.slice(8, 10)) <= day);
   const prevTotal = Math.round(monthSummary(prevKey, premium, `${prevKey}-${String(day).padStart(2, '0')}`).total);
-  void prevSame;
   const diff = cur.total - prevTotal;
   const good = d.snf >= 8.8;
+  const litres = d.am + d.pm;
   const milkText = lang === 'gu' ? `આજે સવારે ${d.am.toFixed(1)} લિટર, સાંજે ${d.pm.toFixed(1)} લિટર. ફેટ ${d.fat.toFixed(1)} ટકા, એસએનએફ ${d.snf.toFixed(1)} ટકા. આજની રકમ ${d.amount} રૂપિયા.`
     : lang === 'hi' ? `आज सुबह ${d.am.toFixed(1)} लीटर, शाम ${d.pm.toFixed(1)} लीटर। फैट ${d.fat.toFixed(1)} प्रतिशत, एसएनएफ ${d.snf.toFixed(1)} प्रतिशत। आज की राशि ${d.amount} रुपये।`
     : `Today ${d.am.toFixed(1)} litres in the morning and ${d.pm.toFixed(1)} in the evening. Fat ${d.fat.toFixed(1)} percent, SNF ${d.snf.toFixed(1)} percent. Today's amount ${d.amount} rupees.`;
   const monthText = lang === 'gu' ? `આ મહિને અત્યાર સુધી ${cur.total} રૂપિયા.` : lang === 'hi' ? `इस महीने अब तक ${cur.total} रुपये।` : `This month so far ${cur.total} rupees.`;
   return (
-    <div className="space-y-3">
-      <div>
-        <div className="text-lg font-bold">{T('namaste')}, {FARMER.first}</div>
-        <div className="text-xs text-muted">{FARMER.society} | {T('member')} {FARMER.memberId}</div>
+    <div className="space-y-3.5">
+      <div className="pt-1">
+        <div className="font-display text-[26px] font-bold leading-tight">{T('namaste')}, {FARMER.first}</div>
+        <div className="text-[14px] text-muted">{FARMER.society}, {T('member')} {FARMER.memberId}</div>
       </div>
-      <div className="card p-4">
-        <div className="flex items-center justify-between"><span className="label">{T('todaysMilk')}</span><PlayButton text={milkText} lang={lang} /></div>
-        <div className="mt-2 grid grid-cols-2 gap-2 font-bold"><div>{T('morning')} {d.am.toFixed(1)} L</div><div>{T('evening')} {d.pm.toFixed(1)} L</div></div>
-        <div className="mt-1 flex items-center gap-2 text-sm">Fat {d.fat.toFixed(1)}% · SNF {d.snf.toFixed(1)}% <Chip tone={good ? 'good' : 'bad'}>{good ? T('goodQuality') : T('checkQuality')}</Chip></div>
-        <div className="mt-3 border-t border-line pt-2 text-2xl font-bold text-primary">{inr(d.amount)} <span className="text-base font-normal text-muted">{T('today')}</span></div>
-      </div>
-      <div className="card p-4">
-        <div className="flex items-center justify-between"><span className="label">{T('monthSoFar')}</span><PlayButton text={monthText} lang={lang} /></div>
-        <div className="mt-1 flex items-baseline gap-3"><span className="text-3xl font-bold">{inr(cur.total)}</span>
-          <span className={`text-sm font-bold ${diff >= 0 ? 'text-good' : 'text-bad'}`}>{diff >= 0 ? '+' : '-'}{inr(Math.abs(diff))} {T('vsLastMonth')}</span></div>
-        <div className="text-xs text-muted">{Math.round(cur.litres)} L · 1-{day} {MONTHS[Number(curKey.slice(5)) - 1]}</div>
-      </div>
-      {published ? (
-        <button onClick={() => go('signals', 'signal')} className={`card block w-full p-4 text-left ${s.farmer.heard ? '' : 'border-warn bg-warn-light'}`}>
-          <div className="flex items-center justify-between"><Chip tone={s.farmer.heard ? 'primary' : 'warn'}>{s.farmer.heard ? `${T('fromSociety')}: ${FARMER.society}` : T('newFromSociety')}</Chip>
-            <PlayButton text={signalMessage(lang, { society: FARMER.society, rate: s.incentive.rate, worth })} lang={lang} /></div>
-          <div className="mt-2 font-bold">{SIGNAL_TITLE[lang]}</div>
-          <div className="text-sm">{SIGNAL_NEED[lang](s.incentive.rate)[1]}</div>
-          <div className="mt-1 text-sm font-bold text-warn">{T('worthToYou')}: {T('about')} {inr(worth)} {T('perMonth')}</div>
-          <div className="mt-1 text-sm font-bold text-primary">{T('seeDetails')} ›</div>
-        </button>
-      ) : (
-        <div className="card border-dashed p-4 text-sm text-muted">{T('noSignals')}</div>
+
+      <section className="overflow-hidden rounded-sheet border border-line bg-white">
+        <div className="flex items-start justify-between px-4 pt-4">
+          <div><div className="label">{T('todaysMilk')}</div>
+            <div className="num font-display text-[34px] font-bold leading-none text-primary"><Count value={d.amount} format={(n) => inr(Math.round(n))} /></div></div>
+          <PlayButton text={milkText} lang={lang} />
+        </div>
+        <div className="mt-3 grid grid-cols-2 border-t border-line text-[15px]">
+          <div className="px-4 py-2.5"><div className="text-muted">{T('morning')}</div><div className="num text-[20px] font-semibold">{d.am.toFixed(1)} L</div></div>
+          <div className="border-l border-line px-4 py-2.5"><div className="text-muted">{T('evening')}</div><div className="num text-[20px] font-semibold">{d.pm.toFixed(1)} L</div></div>
+        </div>
+        <div className="flex items-center justify-between bg-alt px-4 py-2 text-[14px]">
+          <span className="num">Fat {d.fat.toFixed(1)}%, SNF {d.snf.toFixed(1)}%</span>
+          <Chip tone={good ? 'good' : 'bad'}>{good ? T('goodQuality') : T('checkQuality')}</Chip>
+        </div>
+        <div className="h-1.5 bg-fill"><div className="bar-anim h-full bg-primary/70" style={{ width: `${Math.min(100, (litres / 18) * 100)}%` }} /></div>
+      </section>
+
+      <section className="rounded-sheet border border-line bg-white px-4 py-4">
+        <div className="flex items-start justify-between">
+          <div><div className="label">{T('monthSoFar')}</div>
+            <div className="num font-display text-[30px] font-bold leading-tight"><Count value={cur.total} format={(n) => inr(Math.round(n))} /></div></div>
+          <PlayButton text={monthText} lang={lang} />
+        </div>
+        <div className="mt-1 flex flex-wrap items-baseline gap-x-3 text-[14px]">
+          <span className={`font-semibold ${diff >= 0 ? 'text-good' : 'text-bad'}`}>{diff >= 0 ? '+' : '-'}{inr(Math.abs(diff))} {T('vsLastMonth')}</span>
+          <span className="text-muted">{Math.round(cur.litres)} L, 1-{day} {MONTHS[Number(curKey.slice(5)) - 1]}</span>
+        </div>
+      </section>
+
+      {published ? <SignalNotice onOpen={() => go('signals', 'signal')} /> : (
+        <div className="rounded-sheet border border-dashed border-line px-4 py-5 text-center text-[15px] text-muted">{T('noSignals')}</div>
       )}
-      <div className="card border-dashed p-4 text-sm text-muted">{T('alertsNone')}</div>
+      <div className="px-1 text-[14px] text-muted">{T('alertsNone')}</div>
+    </div>
+  );
+}
+
+// The one loud element: a printed notice from the society.
+function SignalNotice({ onOpen, compact }: { onOpen: () => void; compact?: boolean }) {
+  const { s, lang, T, worth } = useF();
+  const fresh = !s.farmer.heard;
+  return (
+    <div role="button" tabIndex={0} onClick={onOpen} onKeyDown={(e) => { if (e.key === 'Enter') onOpen(); }}
+      className="block w-full cursor-pointer overflow-hidden rounded-sheet bg-marigold text-left text-ink shadow-[0_10px_24px_-14px_rgba(201,138,0,.9)] transition active:scale-[0.99]">
+      <div className="blockprint h-3" />
+      <div className="px-4 pb-4 pt-3">
+        <div className="flex items-center justify-between gap-2">
+          <span className="text-[13px] font-semibold text-ink/75">{fresh ? T('newFromSociety') : `${T('fromSociety')}: ${FARMER.society}`}</span>
+          <PlayButton tone="onMarigold" text={signalMessage(lang, { society: FARMER.society, rate: s.incentive.rate, worth })} lang={lang} />
+        </div>
+        <div className="mt-1 font-display text-[22px] font-bold leading-tight">{SIGNAL_TITLE[lang]}</div>
+        {!compact ? <div className="mt-0.5 text-[15px]">{SIGNAL_NEED[lang](s.incentive.rate)[1]}</div> : <div className="text-[14px]">1 Apr - 30 Jun 2027</div>}
+        <div className="mt-3 flex items-end justify-between">
+          <div><div className="text-[13px] text-ink/75">{T('worthToYou')}</div><div className="num font-display text-[24px] font-bold leading-none">{T('about')} {inr(worth)}<span className="text-[15px] font-semibold">{T('perMonth')}</span></div></div>
+          <span className="flex items-center gap-0.5 text-[14px] font-semibold">{T('seeDetails')}<IconChevron size={16} /></span>
+        </div>
+      </div>
     </div>
   );
 }
 
 // ---------------- Signals ----------------
 function Signals() {
-  const { s, lang, T, today, premium, months, worth, published, go, setSub, flash, loan, setLoan, whyMonth, setWhyMonth, monthKeys, complete } = useF();
-  return published ? (
-    <button onClick={() => setSub('signal')} className="card block w-full p-4 text-left">
-      <Chip tone="primary">{T('fromSociety')}: {FARMER.society}</Chip>
-      <div className="mt-2 font-bold">{SIGNAL_TITLE[lang]}</div>
-      <div className="text-sm text-muted">1 Apr - 30 Jun 2027</div>
-      <div className="mt-1 text-sm font-bold text-primary">{T('seeDetails')} ›</div>
-    </button>
-  ) : <div className="card border-dashed p-6 text-center text-muted">{T('noSignals')}</div>;
+  const { T, published, setSub } = useF();
+  return published ? <SignalNotice compact onOpen={() => setSub('signal')} />
+    : <div className="rounded-sheet border border-dashed border-line px-4 py-10 text-center text-muted">{T('noSignals')}</div>;
 }
 
 function SignalDetail() {
-  const { s, lang, T, today, premium, months, worth, published, go, setSub, flash, loan, setLoan, whyMonth, setWhyMonth, monthKeys, complete } = useF();
+  const { s, lang, T, worth, go, flash, loan, setLoan } = useF();
   const msg = signalMessage(lang, { society: FARMER.society, rate: s.incentive.rate, worth });
   const autoRef = useRef(false);
+  const [justSent, setJustSent] = useState(false);
   useEffect(() => { if (s.autoplay && !autoRef.current) { autoRef.current = true; speak(msg, lang); } }, []); // eslint-disable-line react-hooks/exhaustive-deps
   return (
-    <div className="space-y-3">
-      <div className="flex items-center justify-between"><Chip tone="primary">{T('fromSociety')}: {FARMER.society}</Chip><PlayButton text={msg} lang={lang} /></div>
-      <h2 className="text-lg font-bold">{SIGNAL_TITLE[lang]}</h2>
-      <div className="card p-4"><div className="label">{T('whatNeeded')}</div>{SIGNAL_NEED[lang](s.incentive.rate).map((x) => <div key={x} className="mt-1">{x}</div>)}</div>
-      <div className="rounded-xl border border-good bg-good-light p-4">
+    <div className="space-y-3.5">
+      <div className="overflow-hidden rounded-sheet bg-marigold">
+        <div className="blockprint h-3" />
+        <div className="px-4 pb-4 pt-3">
+          <div className="flex items-center justify-between"><span className="text-[13px] font-semibold text-ink/75">{T('fromSociety')}: {FARMER.society}</span><PlayButton tone="onMarigold" text={msg} lang={lang} /></div>
+          <h2 className="mt-1 font-display text-[24px] font-bold leading-tight">{SIGNAL_TITLE[lang]}</h2>
+          <div className="mt-2 space-y-0.5 text-[15px]">{SIGNAL_NEED[lang](s.incentive.rate).map((x) => <div key={x}>{x}</div>)}</div>
+        </div>
+      </div>
+      <section className="rounded-sheet border border-good/30 bg-good-light px-4 py-4">
         <div className="label !text-good">{T('worthToYou')}</div>
-        <div className="text-2xl font-bold text-good">{T('about')} {inr(worth)} {T('perMonth')}</div>
-        <div className="text-xs italic text-muted">{T('basedOn')} · {T('estimateOnly')}</div>
-      </div>
-      <div className="card p-4">
+        <div className="num font-display text-[30px] font-bold leading-tight text-good">{T('about')} {inr(worth)} <span className="text-[17px]">{T('perMonth')}</span></div>
+        <div className="text-[13px] text-muted">{T('basedOn')}. {T('estimateOnly')}.</div>
+      </section>
+      <section className="rounded-sheet border border-line bg-white px-4 py-4">
         <div className="label">{T('whatYouCanDo')}</div>
-        <ul className="mt-2 list-disc space-y-1 pl-5 text-[15px]"><li>{T('act1')}</li><li>{T('act2')}</li><li>{T('act3')}</li></ul>
-        <button className="mt-3 text-sm font-bold text-primary" onClick={() => { setLoan({ ...loan, product: 'scn', purpose: 'feed', amount: 30000, tenure: 12 }); go('finance', 'afford'); }}>{T('exploreFinance')} ›</button>
-      </div>
-      {s.farmer.interested ? <div className="rounded-xl border border-good bg-good-light p-3 text-center font-bold text-good">✓ {T('interestedDone')}</div> :
-        <button className="btn-primary w-full !min-h-[52px]" onClick={() => { s.setFarmer({ interested: true }); s.log('Savitaben (farmer)', 'Marked interested in the summer buffalo premium'); flash(T('interestedDone')); }}>{T('interested')}</button>}
+        <ul className="mt-2 space-y-2 text-[15px]">{['act1', 'act2', 'act3'].map((k) => <li key={k} className="flex gap-2.5"><span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-primary" />{T(k)}</li>)}</ul>
+        <button className="mt-3 flex items-center gap-0.5 text-[14px] font-semibold text-primary" onClick={() => { setLoan({ ...loan, product: 'scn', purpose: 'feed', amount: 30000, tenure: 12 }); go('finance', 'afford'); }}>{T('exploreFinance')}<IconChevron size={16} /></button>
+      </section>
+      {s.farmer.interested ? (
+        <div className={`flex items-center justify-center gap-2 rounded-xl border border-good/40 bg-good-light p-3 font-semibold text-good ${justSent ? 'animate-pop' : ''}`}><IconCheck animate={justSent} />{T('interestedDone')}</div>
+      ) : (
+        <button className="btn-primary w-full !min-h-[54px] text-[17px]" onClick={() => { setJustSent(true); s.setFarmer({ interested: true }); s.log('Savitaben (farmer)', 'Marked interested in the summer buffalo premium'); }}>{T('interested')}</button>
+      )}
       <div className="grid grid-cols-2 gap-2">
         <button className="btn-secondary" onClick={() => go('ask')}>{T('askQ')}</button>
-        <button className="btn-secondary" onClick={() => flash(`📞 ${FARMER.society} (demo)`)}>{T('callSociety')}</button>
+        <button className="btn-secondary" onClick={() => flash(`${T('callSociety')}: ${FARMER.society} (demo)`)}><IconPhone />{T('callSociety')}</button>
       </div>
     </div>
   );
@@ -209,27 +256,27 @@ function Earnings() {
   const text = lang === 'gu' ? `${fmtMonth(m.key)} માં ${Math.round(m.litres)} લિટર, કુલ ${m.total} રૂપિયા.` : lang === 'hi' ? `${fmtMonth(m.key)} में ${Math.round(m.litres)} लीटर, कुल ${m.total} रुपये।` : `${fmtMonth(m.key)}: ${Math.round(m.litres)} litres, total ${m.total} rupees.`;
   return (
     <div className="space-y-3">
-      <div className="card p-3">
+      <div className="card rounded-sheet p-3">
         <div className="h-40">
           <ResponsiveContainer>
             <BarChart data={data} margin={{ top: 18, right: 4, left: 4, bottom: 0 }}>
               <XAxis dataKey="m" tickLine={false} axisLine={false} fontSize={12} />
               <YAxis hide />
-              <Bar dataKey="v" radius={[4, 4, 0, 0]} onClick={(_, i) => setSel(i)}>
-                {data.map((_, i) => <Cell key={i} fill={i === sel ? '#1F5FA8' : '#B5CDEB'} cursor="pointer" />)}
+              <Bar dataKey="v" radius={[6, 6, 0, 0]} onClick={(_, i) => setSel(i)} animationDuration={500}>
+                {data.map((_, i) => <Cell key={i} fill={i === sel ? CHART.indigo : CHART.indigoSoft} cursor="pointer" />)}
                 <LabelList dataKey="v" position="top" fontSize={10} formatter={(v: number) => `${Math.round(v / 1000)}k`} />
               </Bar>
             </BarChart>
           </ResponsiveContainer>
         </div>
       </div>
-      <div className="card p-4">
+      <div className="card rounded-sheet p-4">
         <div className="flex items-center justify-between"><span className="label">{T('statement')}: {fmtMonth(m.key)}</span><PlayButton text={text} lang={lang} /></div>
         <Row k={T('litres')} v={`${Math.round(m.litres)} L`} />
         <Row k={T('base')} v={inr(m.base)} />
         <Row k={T('snfBonus')} v={inr(m.snf)} />
         {m.premium ? <Row k={T('premium')} v={inr(m.premium)} good /> : null}
-        <div className="mt-2 flex justify-between border-t border-line pt-2 text-xl font-bold"><span>{T('total')}</span><span>{inr(m.total)}</span></div>
+        <div className="mt-3 flex items-baseline justify-between border-t border-line pt-3"><span className="font-semibold">{T('total')}</span><span className="num font-display text-[28px] font-bold leading-none"><Count value={m.total} format={(n) => inr(Math.round(n))} /></span></div>
       </div>
       {sel > 0 ? <button className="btn-primary w-full" onClick={() => { setWhyMonth(m.key); setSub('why'); }}>{T('whyChanged')}</button> : null}
     </div>
@@ -251,10 +298,10 @@ function Why() {
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between"><span className="text-sm text-muted">{fmtMonth(cur.key)} {T('comparedWith')} {fmtMonth(prev.key)}</span><PlayButton text={spoken} lang={lang} /></div>
-      <div className={`text-2xl font-bold ${diff >= 0 ? 'text-good' : 'text-bad'}`}>{diff >= 0 ? '+' : '-'}{inr(Math.abs(diff))}</div>
+      <div className={`num font-display text-[38px] font-bold leading-none ${diff >= 0 ? 'text-good' : 'text-bad'}`}>{diff >= 0 ? '+' : '-'}{inr(Math.abs(diff))}</div>
       {reasons.map((r) => (
-        <div key={r.key} className="card p-4">
-          <div className={`text-lg font-bold ${r.amount >= 0 ? 'text-good' : 'text-bad'}`}>{r.amount >= 0 ? '+ ' : '- '}{inr(Math.abs(r.amount))}</div>
+        <div key={r.key} className={`card rounded-sheet border-l-4 p-4 ${r.amount >= 0 ? '!border-l-good' : '!border-l-bad'}`}>
+          <div className={`num text-[20px] font-bold ${r.amount >= 0 ? 'text-good' : 'text-bad'}`}>{r.amount >= 0 ? '+ ' : '- '}{inr(Math.abs(r.amount))}</div>
           <div className="text-[15px]">{label(r.key, r.amount)}</div>
           {r.key === 'snf' ? <div className="text-xs text-muted">SNF {prev.avgSnfBuffalo.toFixed(2)}% → {cur.avgSnfBuffalo.toFixed(2)}%</div> : null}
           {r.key === 'volume' ? <div className="text-xs text-muted">{Math.round(prev.litres)} L → {Math.round(cur.litres)} L</div> : null}
@@ -282,15 +329,15 @@ function Finance() {
   if (sub === 'tracker') return <Tracker />;
   return (
     <div className="space-y-3">
-      <div className="text-lg font-bold">{T('financeHome')}</div>
-      <div className="card p-4">
+      <div className="font-display text-[26px] font-bold leading-tight">{T('financeHome')}</div>
+      <div className="card rounded-sheet p-4">
         <div className="flex items-center justify-between"><span className="label">{T('avgMonthly')}</span><Chip tone="warn">{T('simulated')}</Chip></div>
-        <div className="mt-1 text-3xl font-bold">{inr(avg6)}</div>
+        <div className="num mt-0.5 font-display text-[32px] font-bold leading-tight">{inr(avg6)}</div>
         <div className="text-xs text-muted">{fmtMonth(last12[last12.length - 6].key)} - {fmtMonth(last12[last12.length - 1].key)}</div>
       </div>
       {[['income', T('incomeInsights')], ['afford', T('checkAfford')], ['products', T('exploreOptions')], ['tracker', T('trackApp')]].map(([k, l]) => (
-        <button key={k} onClick={() => setSub(k as Sub)} className="card flex w-full items-center justify-between p-4 text-left font-bold">
-          <span>{l}</span>{k === 'tracker' && s.application ? <Chip tone={STATUS_TONE[s.application.status]}>{T('st_' + s.application.status)}</Chip> : <span className="text-muted">›</span>}
+        <button key={k} onClick={() => setSub(k as Sub)} className="card rounded-sheet flex w-full items-center justify-between px-4 py-3.5 text-left font-semibold transition hover:border-primary/40 active:scale-[0.99]">
+          <span>{l}</span>{k === 'tracker' && s.application ? <Chip tone={STATUS_TONE[s.application.status]}>{T('st_' + s.application.status)}</Chip> : <IconChevron className="text-muted" />}
         </button>
       ))}
       <p className="text-xs text-muted">DairyFin is not a lender. Banks make their own decisions.</p>
@@ -311,14 +358,14 @@ function Income({ list }: { list: MonthSummary[] }) {
   };
   return (
     <div className="space-y-3">
-      <div className="text-lg font-bold">{T('incomeInsights')}</div>
-      <div className="flex gap-2">{[3, 6, 12].map((k) => <button key={k} onClick={() => setN(k)} className={`rounded-full border px-3 py-1 text-sm ${n === k ? 'border-primary bg-primary-light font-bold text-primary' : 'border-line'}`}>{k} {T('months')}</button>)}</div>
-      <div className="card p-4">
-        <div className="label">{T('total')}</div><div className="text-2xl font-bold">{inr(total)}</div>
-        <div className="text-sm text-muted">{T('avgMonthly')}: {inr(Math.round(total / sel.length))} · {Math.round(sel.reduce((x, m) => x + m.litres, 0))} L</div>
+      <div className="font-display text-[24px] font-bold leading-tight">{T('incomeInsights')}</div>
+      <Segmented options={[3, 6, 12].map((k) => ({ id: String(k), label: `${k} ${T('months')}` }))} value={String(n)} onChange={(v) => setN(Number(v))} />
+      <div className="card rounded-sheet p-4">
+        <div className="label">{T('total')}</div><div className="num font-display text-[30px] font-bold leading-tight"><Count value={total} format={(x) => inr(Math.round(x))} /></div>
+        <div className="text-sm text-muted">{T('avgMonthly')}: {inr(Math.round(total / sel.length))}, {Math.round(sel.reduce((x, m) => x + m.litres, 0))} L</div>
         <div className="mt-3 h-40"><ResponsiveContainer><BarChart data={data} margin={{ top: 16, right: 4, left: 4, bottom: 0 }}>
           <XAxis dataKey="m" tickLine={false} axisLine={false} fontSize={11} /><YAxis hide />
-          <Bar dataKey="v" fill="#1F5FA8" radius={[3, 3, 0, 0]}><LabelList dataKey="v" position="top" fontSize={10} formatter={(v: number) => `${Math.round(v / 1000)}k`} /></Bar>
+          <Bar dataKey="v" fill={CHART.indigo} radius={[6, 6, 0, 0]} animationDuration={500}><LabelList dataKey="v" position="top" fontSize={10} formatter={(v: number) => `${Math.round(v / 1000)}k`} /></Bar>
         </BarChart></ResponsiveContainer></div>
         <div className="mt-2 flex items-center gap-2 text-xs text-muted">{sel.length} / {n} {T('coverage')} <Chip tone="warn">{T('simulated')}</Chip></div>
       </div>
@@ -337,19 +384,19 @@ function Afford({ list }: { list: MonthSummary[] }) {
   const lowOk = lowest - loan.expenses - loan.existing - emi >= 0;
   const high = surplus > 0 && emi / surplus > 0.5;
   const field = (k: keyof typeof loan, l: string, extra?: string) => (
-    <label className="block"><span className="text-xs font-bold text-muted">{l}{extra ? <span className="font-normal"> ({extra})</span> : null}</span>
+    <label className="block"><span className="text-[13px] font-semibold text-muted">{l}{extra ? <span className="font-normal"> ({extra})</span> : null}</span>
       <input className="input mt-1" type="number" inputMode="numeric" value={loan[k] as number} onChange={(e) => setLoan({ ...loan, [k]: Number(e.target.value) })} /></label>
   );
   const spoken = `${T('estimateOnly')}. ${T('emi')} ${emi}. ${T('leftAfter')} ${left}. ${lowOk ? T('lowestOk') : T('lowestBad')}. ${T('notGuaranteed')}`;
   return (
     <div className="space-y-3">
-      <div className="text-lg font-bold">{T('checkAfford')}</div>
+      <div className="font-display text-[24px] font-bold leading-tight">{T('checkAfford')}</div>
       {field('amount', T('loanAmount'))}{field('rate', T('interest'))}{field('tenure', T('tenure'))}
-      <label className="block"><span className="text-xs font-bold text-muted">{T('monthlyIncome')} <span className="font-normal">({T('fromRecords')})</span></span><div className="input mt-1 bg-fill">{inr(income)}</div></label>
+      <label className="block"><span className="text-[13px] font-semibold text-muted">{T('monthlyIncome')} <span className="font-normal">({T('fromRecords')})</span></span><div className="input mt-1 bg-fill">{inr(income)}</div></label>
       {field('expenses', T('expenses'))}{field('existing', T('existingEmi'))}
-      <div className={`rounded-xl border-2 border-dashed p-4 ${high || !lowOk ? 'border-warn bg-warn-light' : 'border-primary'}`}>
+      <div className={`rounded-sheet border-2 border-dashed p-4 transition-colors duration-300 ${high || !lowOk ? 'border-marigold-deep bg-warn-light' : 'border-primary/50 bg-white'}`}>
         <div className="flex items-center justify-between"><Chip>{T('estimateOnly')}</Chip><PlayButton text={spoken} lang={lang} /></div>
-        <div className="mt-2 text-xl font-bold">{T('emi')} {inr(emi)} {T('perMonth')}</div>
+        <div className="mt-2 font-display text-[28px] font-bold leading-tight">{T('emi')} <Count value={emi} format={(x) => inr(Math.round(x))} /> <span className="text-[16px] font-semibold">{T('perMonth')}</span></div>
         <div className="text-[15px]">{T('leftAfter')}: {inr(left)}</div>
         <div className={`mt-1 text-sm font-bold ${lowOk ? 'text-good' : 'text-bad'}`}>{lowOk ? T('lowestOk') : T('lowestBad')}</div>
         {high ? <div className="mt-2 text-sm font-bold text-warn">{T('emiHigh')}</div> : null}
@@ -364,21 +411,21 @@ function Products() {
   const { s, lang, T, today, premium, months, worth, published, go, setSub, flash, loan, setLoan, whyMonth, setWhyMonth, monthKeys, complete } = useF();
   return (
     <div className="space-y-3">
-      <div className="text-lg font-bold">{T('exploreOptions')}</div>
+      <div className="font-display text-[24px] font-bold leading-tight">{T('exploreOptions')}</div>
       {PRODUCTS_DEMO.map((p) => {
         const amt = Math.min(Math.max(loan.amount, p.min), p.max), n = Math.min(loan.tenure, p.maxTenure);
         const e = emiFor(amt, p.rate, n), fee = (amt * p.feePct) / 100;
         return (
-          <div key={p.id} className="card p-4">
+          <div key={p.id} className="card rounded-sheet p-4">
             <div className="flex items-start justify-between gap-2"><div><div className="font-bold">{p.lender}</div><div className="text-sm">{p.name}</div></div><Chip tone="warn">{T('demoOffer')}</Chip></div>
             <div className="mt-2 grid grid-cols-2 gap-1 text-sm">
               <span className="text-muted">{T('range')}</span><span>{inr(p.min)} - {inr(p.max)}</span>
-              <span className="text-muted">{T('rate')}</span><span>{p.rate}% · {p.maxTenure} {T('months')}</span>
+              <span className="text-muted">{T('rate')}</span><span>{p.rate}%, {p.maxTenure} {T('months')}</span>
               <span className="text-muted">{T('fees')}</span><span>{p.feePct}% ({inr(fee)})</span>
               <span className="text-muted">{T('emi')}</span><span className="font-bold">{inr(Math.round(e))} × {n}</span>
               <span className="text-muted">{T('total')}</span><span>{inr(Math.round(e * n + fee))}</span>
             </div>
-            <div className="mt-1 text-xs text-muted">{T('eligibility')}: {p.elig} · source date 31 Oct 2026 (demo)</div>
+            <div className="mt-1 text-xs text-muted">{T('eligibility')}: {p.elig}, source date 31 Oct 2026 (demo)</div>
             <button className="btn-secondary mt-3 w-full" onClick={() => { setLoan({ ...loan, product: p.id, amount: amt, tenure: n, rate: p.rate }); setSub('consent'); }}>{T('startApp')}</button>
           </div>
         );
@@ -394,9 +441,9 @@ function Consent() {
   const rows: [string, string][] = [[T('sharedWith'), p.lender], [T('purpose'), T('purposeText')], [T('data'), T('dataText')], [T('period'), T('last12')], [T('keptFor'), T('keptText')], [T('youCan'), T('youCanText')]];
   return (
     <div className="space-y-3">
-      <div className="text-lg font-bold">{T('shareRecords')}</div>
+      <div className="font-display text-[24px] font-bold leading-tight">{T('shareRecords')}</div>
       <div className="flex items-center justify-between text-sm text-muted">{T('listenCarefully')}<PlayButton text={rows.map((r) => `${r[0]}: ${r[1]}`).join('. ')} lang={lang} /></div>
-      {rows.map(([k, v]) => <div key={k} className="card px-4 py-2"><div className="label">{k}</div><div className="text-[15px]">{v}</div></div>)}
+      {rows.map(([k, v]) => <div key={k} className="card rounded-sheet px-4 py-2.5"><div className="label">{k}</div><div className="text-[15px]">{v}</div></div>)}
       <label className="flex items-center gap-3 rounded-xl border border-line bg-fill p-3 font-bold"><input type="checkbox" className="h-5 w-5" checked={ok} onChange={(e) => setOk(e.target.checked)} />{T('allow')}</label>
       <div className="grid grid-cols-2 gap-2">
         <button className="btn-secondary !min-h-[52px]" onClick={() => setSub('products')}>{T('notNow')}</button>
@@ -414,11 +461,11 @@ function Apply() {
   const p = PRODUCTS_DEMO.find((x) => x.id === loan.product)!;
   return (
     <div className="space-y-3">
-      <div className="text-lg font-bold">{T('application')}</div>
-      <div className="card p-4 text-[15px]"><div className="font-bold">{p.lender}</div><div>{p.name}</div>
-        <div className="mt-1">{inr(loan.amount)} · {loan.tenure} {T('months')} · {p.rate}%</div></div>
-      <div className="card p-4"><div className="label">{T('documents')}</div>
-        <div className="mt-2 space-y-1 text-[15px]"><div>✓ {T('idProof')}</div><div>✓ {T('bankAcc')}</div><div className="text-muted">○ {T('cattleQuote')}</div></div></div>
+      <div className="font-display text-[24px] font-bold leading-tight">{T('application')}</div>
+      <div className="card rounded-sheet p-4 text-[15px]"><div className="font-bold">{p.lender}</div><div>{p.name}</div>
+        <div className="mt-1">{inr(loan.amount)}, {loan.tenure} {T('months')}, {p.rate}%</div></div>
+      <div className="card rounded-sheet p-4"><div className="label">{T('documents')}</div>
+        <div className="mt-2 space-y-1.5 text-[15px]"><div className="flex items-center gap-2"><IconCheck size={18} className="text-good" />{T('idProof')}</div><div className="flex items-center gap-2"><IconCheck size={18} className="text-good" />{T('bankAcc')}</div><div className="flex items-center gap-2 text-muted"><span className="mx-[3px] h-3 w-3 rounded-full border-2 border-line" />{T('cattleQuote')}</div></div></div>
       <p className="text-sm text-muted">{T('bankDecides')}</p>
       <button className="btn-primary w-full" onClick={() => {
         const c = s.consents.find((x) => x.recipient === p.lender && x.status === 'active');
@@ -432,20 +479,20 @@ function Apply() {
 function Tracker() {
   const { s, lang, T, today, premium, months, worth, published, go, setSub, flash, loan, setLoan, whyMonth, setWhyMonth, monthKeys, complete } = useF();
   const a = s.application;
-  if (!a) return <div className="card border-dashed p-6 text-center text-muted">{T('noApp')}</div>;
+  if (!a) return <div className="rounded-sheet border border-dashed border-line p-8 text-center text-muted">{T('noApp')}</div>;
   return (
     <div className="space-y-3">
-      <div className="card p-4"><div className="flex items-center justify-between"><span className="font-bold">{T('reference')} {a.ref}</span><Chip tone={STATUS_TONE[a.status]}>{T('st_' + a.status)}</Chip></div>
-        <div className="text-sm">{a.lender} · {a.product} · {inr(a.amount)}</div></div>
+      <div className="card rounded-sheet p-4"><div className="flex items-center justify-between"><span className="font-bold">{T('reference')} {a.ref}</span><Chip tone={STATUS_TONE[a.status]}>{T('st_' + a.status)}</Chip></div>
+        <div className="text-sm">{a.lender}, {a.product}, {inr(a.amount)}</div></div>
       {a.status === 'more_info' ? (
-        <div className="rounded-xl border border-warn bg-warn-light p-4"><div className="font-bold text-warn">{T('docRequested')}</div><div className="text-sm">{T('cattleQuote')}</div>
+        <div className="animate-pop rounded-sheet border border-marigold-deep/40 bg-warn-light p-4"><div className="font-bold text-warn">{T('docRequested')}</div><div className="text-sm">{T('cattleQuote')}</div>
           <button className="btn-primary mt-2 w-full" onClick={() => { s.uploadDoc(); flash(T('uploaded')); }}>{T('upload')}</button></div>
       ) : null}
-      <div className="card p-4">
+      <div className="card rounded-sheet p-4">
         <div className="label">{T('status')}</div>
-        <ol className="mt-2 space-y-3 border-l-2 border-line pl-4">
+        <ol className="mt-3 space-y-4 border-l-2 border-line pl-5">
           {a.history.map((h, i) => (
-            <li key={i}><div className="font-bold">{T('st_' + h.status)}</div><div className="text-xs text-muted">{new Date(h.at).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })}</div><div className="text-sm">{h.note}</div></li>
+            <li key={i} className="relative animate-view-in"><span className={`absolute -left-[27px] top-1.5 h-3 w-3 rounded-full ring-4 ring-white ${i === a.history.length - 1 ? 'bg-primary' : 'bg-line'}`} /><div className="font-semibold">{T('st_' + h.status)}</div><div className="text-xs text-muted">{new Date(h.at).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })}</div><div className="text-sm">{h.note}</div></li>
           ))}
         </ol>
       </div>
@@ -494,28 +541,28 @@ function Ask() {
   return (
     <div className="space-y-3">
       {said ? (
-        <div className="rounded-xl border border-line bg-fill p-3"><div className="label">{T('youSaid')}</div><div className="italic">“{said}”</div>
+        <div className="animate-view-in rounded-sheet border border-line bg-fill p-3.5"><div className="label">{T('youSaid')}</div><div className="italic">“{said}”</div>
           <button className="mt-1 text-sm font-bold text-primary" onClick={() => { setSaid(null); setAns(null); }}>{T('tryAgain')}</button></div>
       ) : null}
       {ans ? (
-        <div className="card p-4">
+        <div className="card rounded-sheet animate-view-in p-4">
           <div className="flex items-center justify-between"><Chip>{T('automated')}</Chip><PlayButton text={full} lang={lang} /></div>
           <div className="mt-2">{ans.text}</div>
           {ans.bullets ? <ul className="mt-1 list-disc pl-5 text-[15px]">{ans.bullets.map((b) => <li key={b}>{b}</li>)}</ul> : null}
-          <div className="mt-2 flex items-center gap-3 text-sm text-muted">{T('helpful')} <button className="font-bold text-primary" onClick={() => setFb('y')}>{T('yes')}</button><button className="font-bold text-primary" onClick={() => setFb('n')}>{T('no')}</button>{fb ? '✓' : ''}</div>
+          <div className="mt-2 flex items-center gap-3 text-sm text-muted">{T('helpful')} <button className="font-bold text-primary" onClick={() => setFb('y')}>{T('yes')}</button><button className="font-bold text-primary" onClick={() => setFb('n')}>{T('no')}</button>{fb ? <IconCheck size={16} className="text-good" /> : null}</div>
           <button className="btn-secondary mt-3 w-full" onClick={() => { s.addQuery(said ?? '', lang); flash(T('sentToSociety')); }}>{T('talkPerson')}</button>
         </div>
       ) : null}
-      <div className="label pt-2 text-center">{T('suggested')}</div>
+      <div className="label pt-1 text-center">{T('suggested')}</div>
       <div className="flex flex-col items-center gap-2">
-        {['sq1', 'sq2', 'sq3', 'sq4'].map((k) => <button key={k} onClick={() => run(T(k), false)} className="w-full max-w-[320px] rounded-full border border-line bg-white px-4 py-2 text-[15px]">{T(k)}</button>)}
+        {['sq1', 'sq2', 'sq3', 'sq4'].map((k) => <button key={k} onClick={() => run(T(k), false)} className="w-full max-w-[340px] rounded-full border border-line bg-white px-4 py-2 text-[15px] transition hover:border-primary/40 hover:bg-primary-light active:scale-[0.99]">{T(k)}</button>)}
       </div>
       <form className="flex gap-2 pt-2" onSubmit={(e) => { e.preventDefault(); if (q.trim()) { run(q.trim(), false); setQ(''); } }}>
         <input className="input" placeholder={T('typeInstead')} value={q} onChange={(e) => setQ(e.target.value)} />
-        <button className="btn-quiet" type="submit">→</button>
+        <button className="btn-quiet" type="submit" aria-label="Ask"><IconSend /></button>
       </form>
       <div className="flex flex-col items-center pt-4">
-        <button aria-label={T('tapSpeak')} onClick={start} className={`flex h-20 w-20 items-center justify-center rounded-full bg-primary text-3xl text-white ${state === 'listening' ? 'listening' : ''}`}>🎤</button>
+        <button aria-label={T('tapSpeak')} onClick={start} className={`flex h-[84px] w-[84px] items-center justify-center rounded-full transition ${state === 'listening' ? 'listening bg-primary text-white' : 'bg-marigold text-ink shadow-[0_10px_24px_-10px_rgba(201,138,0,.8)] active:scale-95'}`}>{state === 'listening' ? <Waveform bars={5} className="!h-7 [&>span]:!w-1" color="#fff" /> : <IconMic size={34} />}</button>
         <div className="mt-2 text-sm text-muted">{state === 'listening' ? T('listening') : state === 'working' ? T('thinking') : state === 'error' ? 'Could not hear clearly. Try again or type.' : T('tapSpeak')}</div>
         <div className="mt-1 text-[11px] text-muted">{T('voiceSource')}: {mode === 'gnani' ? 'Gnani.ai' : mode === 'browser' ? 'browser' : 'not available, please type'}</div>
       </div>
@@ -528,24 +575,24 @@ function Profile() {
   const { s, lang, T, today, premium, months, worth, published, go, setSub, flash, loan, setLoan, whyMonth, setWhyMonth, monthKeys, complete } = useF();
   return (
     <div className="space-y-3">
-      <div className="card p-4"><div className="font-bold">{FARMER.name}</div><div className="text-sm text-muted">{FARMER.society} · {T('member')} {FARMER.memberId} · {FARMER.village}</div>
-        <div className="text-sm text-muted">🐃 {FARMER.animals.buffalo} · 🐄 {FARMER.animals.cow}</div></div>
-      <div className="card p-4"><div className="label">{T('language')}</div>
-        <div className="mt-2 flex gap-2">{LANGS.map((l) => <button key={l.id} onClick={() => s.set({ lang: l.id })} className={`rounded-full border px-3 py-1 ${lang === l.id ? 'border-primary bg-primary-light font-bold text-primary' : 'border-line'}`}>{l.label}</button>)}</div>
+      <div className="card rounded-sheet p-4"><div className="font-bold">{FARMER.name}</div><div className="text-sm text-muted">{FARMER.society}, {T('member')} {FARMER.memberId}, {FARMER.village}</div>
+        <div className="text-sm text-muted">{FARMER.animals.buffalo} buffaloes, {FARMER.animals.cow} cow</div></div>
+      <div className="card rounded-sheet p-4"><div className="label">{T('language')}</div>
+        <div className="mt-2 flex gap-2">{LANGS.map((l) => <button key={l.id} onClick={() => s.set({ lang: l.id })} className={`rounded-full border px-3.5 py-1.5 transition-colors ${lang === l.id ? 'border-primary bg-primary text-white' : 'border-line bg-white'}`}>{l.label}</button>)}</div>
         <label className="mt-3 flex items-center gap-2 text-sm"><input type="checkbox" checked={s.autoplay} onChange={(e) => s.set({ autoplay: e.target.checked })} /> Play messages aloud automatically</label>
       </div>
-      <div className="card p-4"><div className="label">{T('myData')}</div><p className="mt-1 text-[15px]">{T('myDataText')}</p>
+      <div className="card rounded-sheet p-4"><div className="label">{T('myData')}</div><p className="mt-1 text-[15px]">{T('myDataText')}</p>
         <button className="btn-quiet mt-2 w-full" disabled={s.farmer.correction} onClick={() => { s.setFarmer({ correction: true }); s.addQuery('Data correction request', lang); }}>{s.farmer.correction ? T('requested') : T('requestCorrection')}</button></div>
-      <div className="card p-4"><div className="label">{T('consents')}</div>
+      <div className="card rounded-sheet p-4"><div className="label">{T('consents')}</div>
         <div className="mt-2 flex items-center justify-between text-sm"><span>Signals from {FARMER.society}</span><Chip tone="good">active</Chip></div>
         {s.consents.map((c) => (
           <div key={c.id} className="mt-2 flex items-center justify-between gap-2 border-t border-line pt-2 text-sm">
-            <span>{c.id}: {c.recipient}<br /><span className="text-xs text-muted">{c.purpose} · {c.period}</span></span>
+            <span>{c.id}: {c.recipient}<br /><span className="text-xs text-muted">{c.purpose}, {c.period}</span></span>
             {c.status === 'active' ? <button className="btn-quiet !min-h-[34px] !px-3 text-xs" onClick={() => s.withdrawConsent(c.id)}>{T('withdraw')}</button> : <Chip>{T('withdrawn')}</Chip>}
           </div>
         ))}
       </div>
-      <p className="text-xs text-muted">Grievance officer (demo): grievance@doodhsetu.example · Your data stays in India.</p>
+      <p className="text-xs text-muted">Grievance officer (demo): grievance@doodhsetu.example, Your data stays in India.</p>
     </div>
   );
 }

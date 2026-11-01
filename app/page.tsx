@@ -2,6 +2,7 @@
 import Link from 'next/link';
 import { ClientOnly } from '@/components/Providers';
 import { Chip, VoiceBadge } from '@/components/ui';
+import { IconChevron } from '@/components/icons';
 import { useStore } from '@/lib/store';
 import { DEMO_DATES, type DemoDateKey } from '@/lib/demo';
 
@@ -26,67 +27,128 @@ const STEPS: { d: DemoDateKey; app: string; text: string }[] = [
   { d: 'apr', app: 'Planner', text: 'Monitor: response and the share of value passed to farmers.' },
 ];
 
+// The loop the platform closes: city demand reaches the union, the union signals the society,
+// the society tells the farmer, and the farmer's milk (and the price gain) flows back.
+const LOOP = 'M 70 60 C 200 10, 330 10, 450 60 C 520 90, 520 170, 450 200 C 330 250, 200 250, 70 200 C 0 170, 0 90, 70 60 Z';
+const STATIONS = [
+  { x: 70, y: 60, t: 'City demand', s: 'shops, quick commerce' },
+  { x: 450, y: 60, t: 'District union', s: 'forecast, product mix' },
+  { x: 450, y: 200, t: 'Village society', s: 'message in 3 languages' },
+  { x: 70, y: 200, t: 'Farmer', s: 'more milk, better price' },
+];
+
+function Loop() {
+  return (
+    <svg viewBox="-20 -10 560 290" className="w-full" role="img" aria-label="Demand travels from the city to the union, society and farmer; milk and price gains flow back.">
+      <path d={LOOP} fill="none" stroke="rgba(255,255,255,.18)" strokeWidth="2" />
+      <path d={LOOP} fill="none" stroke="#F4B400" strokeWidth="2.5" strokeDasharray="6 10" style={{ animation: 'dash 2.4s linear infinite' }} />
+      {[0, 1, 2].map((i) => (
+        <g key={i} style={{ offsetPath: `path('${LOOP}')`, offsetRotate: '0deg', animation: `travel 9s linear ${-i * 3}s infinite` } as React.CSSProperties}>
+          <path d="M0 -11 C 5 -4, 8 0, 8 4 a8 8 0 0 1 -16 0 c0 -4 3 -8 8 -15Z" fill={i === 0 ? '#FFFFFF' : '#FFF3CF'} opacity={i === 0 ? 1 : 0.75} />
+        </g>
+      ))}
+      {STATIONS.map((st, i) => (
+        <g key={st.t}>
+          <circle cx={st.x} cy={st.y} r="11" fill="#1B2560" stroke="#F4B400" strokeWidth="2.5" />
+          <circle cx={st.x} cy={st.y} r="4" fill="#F4B400" />
+          <text x={st.x} y={i < 2 ? st.y + 34 : st.y - 32} textAnchor={i === 0 || i === 3 ? 'start' : 'end'} dx={i === 0 || i === 3 ? -18 : 18} fill="#fff" fontSize="17" fontWeight="700" fontFamily="'Baloo 2', sans-serif">{st.t}</text>
+          <text x={st.x} y={i < 2 ? st.y + 50 : st.y - 16} textAnchor={i === 0 || i === 3 ? 'start' : 'end'} dx={i === 0 || i === 3 ? -18 : 18} fill="rgba(255,255,255,.7)" fontSize="12.5">{st.s}</text>
+        </g>
+      ))}
+    </svg>
+  );
+}
+
 function Home() {
   const s = useStore();
+  const openQ = s.queries.filter((q) => q.status === 'open').length;
+  const state = [
+    { k: 'Incentive', v: s.incentive.status },
+    { k: 'Farmer interested', v: s.farmer.interested ? 'yes' : 'no' },
+    { k: 'Application', v: s.application ? s.application.status : 'none' },
+    { k: 'Open queries', v: String(openQ) },
+  ];
   return (
-    <div className="mx-auto max-w-6xl px-5 py-8">
-      <div className="flex flex-wrap items-center gap-3">
-        <h1 className="text-3xl font-bold text-console">Doodh Setu</h1>
-        <Chip tone="warn">Prototype v0.1</Chip>
-        <VoiceBadge />
-      </div>
-      <p className="mt-2 max-w-3xl text-muted">
-        A demand-to-farmer intelligence platform for a dairy cooperative: better demand data and forecasts, a better product mix, and seasonal signals and price gains passed back to farmers through their village society. Student prototype for the Amul case. All data is synthetic, calibrated to public Indian patterns.
-      </p>
-
-      <div className="mt-6 grid gap-4 md:grid-cols-2">
-        {APPS.map((a) => (
-          <Link key={a.href} href={a.href} target="_blank" className="card block p-5 transition hover:border-primary hover:shadow-sm">
-            <div className="text-lg font-bold text-primary">{a.title} ↗</div>
-            <div className="text-xs font-bold text-muted">{a.who}</div>
-            <p className="mt-2 text-sm">{a.desc}</p>
-          </Link>
-        ))}
-      </div>
-      <p className="mt-2 text-xs text-muted">Each app opens in a new tab. Open them side by side: actions in one appear in the others (same browser).</p>
-
-      <div className="mt-8 grid gap-6 lg:grid-cols-[1fr_340px]">
-        <div className="card p-5">
-          <h2 className="text-lg font-bold">Demo script</h2>
-          <ol className="mt-3 space-y-2">
-            {STEPS.map((st, i) => (
-              <li key={i} className="flex gap-3 text-sm">
-                <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary-light text-xs font-bold text-primary">{i + 1}</span>
-                <span><b>{st.app}</b> <span className="text-muted">({DEMO_DATES[st.d].label})</span>: {st.text}</span>
-              </li>
-            ))}
-          </ol>
-        </div>
-        <div className="space-y-4">
-          <div className="card p-5">
-            <h2 className="font-bold">Demo date</h2>
-            <div className="mt-3 space-y-2">
-              {(Object.keys(DEMO_DATES) as DemoDateKey[]).map((k) => (
-                <label key={k} className={`flex cursor-pointer gap-3 rounded-lg border p-3 ${s.demoDate === k ? 'border-primary bg-primary-light' : 'border-line'}`}>
-                  <input type="radio" checked={s.demoDate === k} onChange={() => s.set({ demoDate: k })} />
-                  <span><b>{DEMO_DATES[k].label}</b><br /><span className="text-xs text-muted">{DEMO_DATES[k].note}</span></span>
-                </label>
-              ))}
+    <div className="min-h-screen bg-milk">
+      <section className="relative overflow-hidden bg-console text-white">
+        <div className="mx-auto grid max-w-6xl items-center gap-8 px-5 pb-10 pt-9 lg:grid-cols-[1fr_520px]">
+          <div>
+            <div className="flex flex-wrap items-center gap-2">
+              <Chip tone="marigold">Prototype v0.1</Chip>
+              <VoiceBadge />
             </div>
+            <h1 className="mt-4 font-display text-[52px] font-extrabold leading-[0.95] tracking-tight sm:text-[64px]">Doodh Setu</h1>
+            <p className="mt-4 max-w-[34ch] text-[19px] leading-snug text-white/85">
+              From what the city buys to what the village milks, and the price gain back to the farmer.
+            </p>
+            <p className="mt-4 max-w-[60ch] text-[14px] leading-relaxed text-white/60">
+              A demand-to-farmer intelligence platform for a dairy cooperative. Student prototype for the Amul case. All data is synthetic, calibrated to public Indian patterns.
+            </p>
           </div>
-          <div className="card p-5">
-            <h2 className="font-bold">Demo state</h2>
-            <ul className="mt-2 space-y-1 text-sm">
-              <li>Incentive: <b>{s.incentive.status}</b></li>
-              <li>Farmer interested: <b>{s.farmer.interested ? 'yes' : 'no'}</b></li>
-              <li>Application: <b>{s.application ? s.application.status : 'none'}</b></li>
-              <li>Open queries: <b>{s.queries.filter((q) => q.status === 'open').length}</b></li>
-            </ul>
-            <button className="btn-quiet mt-3 w-full" onClick={() => { if (confirm('Reset the demo to the start?')) s.reset(); }}>Reset demo</button>
+          <div className="mx-auto w-full max-w-[520px]"><Loop /></div>
+        </div>
+        <div className="blockprint h-3 w-full" />
+      </section>
+
+      <div className="mx-auto max-w-6xl px-5 py-9">
+        <h2 className="font-display text-[24px] font-bold">Open an app</h2>
+        <p className="mt-1 text-[14px] text-muted">Each opens in a new tab. Put them side by side: an action in one shows up in the others (same browser).</p>
+        <div className="mt-4 grid gap-px overflow-hidden rounded-sheet border border-line bg-line md:grid-cols-2">
+          {APPS.map((a) => (
+            <Link key={a.href} href={a.href} target="_blank" className="group flex items-start gap-4 bg-white p-5 transition-colors hover:bg-primary-light">
+              <div className="min-w-0 flex-1">
+                <div className="text-[19px] font-bold text-primary">{a.title}</div>
+                <div className="text-[13px] font-semibold text-muted">{a.who}</div>
+                <p className="mt-2 text-[15px] leading-relaxed">{a.desc}</p>
+              </div>
+              <IconChevron size={22} className="mt-1 shrink-0 text-primary transition-transform group-hover:translate-x-1" />
+            </Link>
+          ))}
+        </div>
+
+        <div className="mt-10 grid gap-8 lg:grid-cols-[1fr_340px]">
+          <div>
+            <h2 className="font-display text-[24px] font-bold">Demo script</h2>
+            <ol className="relative mt-4 space-y-3 before:absolute before:bottom-3 before:left-[13px] before:top-3 before:w-[2px] before:bg-line">
+              {STEPS.map((st, i) => {
+                const newDate = i === 0 || STEPS[i - 1].d !== st.d;
+                return (
+                  <li key={i} className="relative">
+                    {newDate ? <div className="mb-2 ml-10 text-[13px] font-semibold text-marigold-deep">{DEMO_DATES[st.d].label}</div> : null}
+                    <div className="flex gap-3 text-[15px]">
+                      <span className="relative z-[1] flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-white text-[13px] font-bold text-primary ring-2 ring-primary/25">{i + 1}</span>
+                      <span className="pt-0.5"><b className="font-semibold">{st.app}</b>: {st.text}</span>
+                    </div>
+                  </li>
+                );
+              })}
+            </ol>
           </div>
-          <div className="card p-5 text-xs text-muted">
-            Voice uses Gnani.ai (Vachana) speech-to-text and text-to-speech when an API key is set on the server. Without a key, the browser&apos;s built-in voice is used, which may not have Gujarati on every device.
-          </div>
+          <aside className="space-y-4">
+            <div className="rounded-sheet border border-line bg-white p-5">
+              <h2 className="font-bold">Demo date</h2>
+              <div className="mt-3 space-y-2">
+                {(Object.keys(DEMO_DATES) as DemoDateKey[]).map((k) => (
+                  <label key={k} className={`flex cursor-pointer gap-3 rounded-xl border p-3 transition-colors ${s.demoDate === k ? 'border-primary bg-primary-light' : 'border-line hover:bg-alt'}`}>
+                    <input type="radio" className="mt-1 accent-[#26347F]" checked={s.demoDate === k} onChange={() => s.set({ demoDate: k })} />
+                    <span><b>{DEMO_DATES[k].label}</b><br /><span className="text-[13px] text-muted">{DEMO_DATES[k].note}</span></span>
+                  </label>
+                ))}
+              </div>
+            </div>
+            <div className="rounded-sheet border border-line bg-white p-5">
+              <h2 className="font-bold">Demo state</h2>
+              <dl className="mt-2 divide-y divide-[#E8EBF1] text-[15px]">
+                {state.map((x) => (
+                  <div key={x.k} className="flex justify-between py-1.5"><dt className="text-muted">{x.k}</dt><dd key={x.v} className="animate-pop font-semibold">{x.v}</dd></div>
+                ))}
+              </dl>
+              <button className="btn-quiet mt-3 w-full" onClick={() => { if (confirm('Reset the demo to the start?')) s.reset(); }}>Reset demo</button>
+            </div>
+            <p className="px-1 text-[13px] leading-relaxed text-muted">
+              Voice uses Gnani.ai (Vachana) speech-to-text and text-to-speech when an API key is set on the server. Without a key, the browser&apos;s built-in voice is used, which may not have Gujarati on every device.
+            </p>
+          </aside>
         </div>
       </div>
     </div>

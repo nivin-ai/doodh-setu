@@ -6,7 +6,8 @@ import { DEMO_DATES, FARMER, PREMIUM_PERIOD } from '@/lib/demo';
 import { signalMessage, type Lang } from '@/lib/i18n';
 import { worthToFarmer } from '@/lib/farmer';
 import { gauss, inr, mulberry32, num } from '@/lib/util';
-import { Chip, ConsoleShell, Note, PageTitle, PlayButton, Stat } from './ui';
+import { CHART, Chip, ConsoleShell, Count, Note, PageTitle, PlayButton, Segmented, Stat } from './ui';
+import { IconCheck, IconChevron } from './icons';
 
 const MEMBERS = (() => {
   const r = mulberry32(7);
@@ -30,7 +31,7 @@ export default function SocietyApp() {
     { id: 'members', label: 'Members' }, { id: 'queries', label: 'Queries', badge: openQ }, { id: 'reports', label: 'Reports' },
   ];
   return (
-    <ConsoleShell title={`Society dashboard | ${FARMER.society}`} menu={menu} active={view} onSelect={setView} right={<span>Rameshbhai (secretary)</span>}>
+    <ConsoleShell title="Society dashboard" place={FARMER.society} menu={menu} active={view} onSelect={setView} right={<span className="rounded-full bg-white/10 px-3 py-1">Rameshbhai, secretary</span>}>
       {view === 'overview' ? <Overview go={setView} /> : view === 'targets' ? <Targets /> : view === 'members' ? <Members /> : view === 'queries' ? <Queries /> : <Reports />}
     </ConsoleShell>
   );
@@ -59,12 +60,12 @@ function Overview({ go }: { go: (v: string) => void }) {
         <Stat label="Members reached" value={published ? `${r.heard} / 412` : '-'} sub={published ? 'Heard the latest signal' : 'No active signal'} />
         <Stat label="Interested" value={published ? r.interested : '-'} sub={published ? 'Asked for follow-up' : ''} />
       </div>
-      <div className="card mt-5 p-4">
-        <div className="font-bold">Pending</div>
-        <ul className="mt-2 space-y-2 text-sm">
-          {s.incentive.status === 'approved' ? <li><button className="font-bold text-primary" onClick={() => go('targets')}>New approved target from the union: publish to members ›</button></li> : null}
-          {s.queries.filter((q) => q.status === 'open').length ? <li><button className="font-bold text-primary" onClick={() => go('queries')}>{s.queries.filter((q) => q.status === 'open').length} member {s.queries.filter((q) => q.status === 'open').length === 1 ? 'query' : 'queries'} waiting ›</button></li> : null}
-          {s.incentive.status !== 'approved' && !s.queries.some((q) => q.status === 'open') ? <li className="text-muted">Nothing pending.</li> : null}
+      <div className="mt-6 max-w-[720px]">
+        <h3 className="font-bold">Needs your action</h3>
+        <ul className="mt-2 divide-y divide-line overflow-hidden rounded-xl border border-line bg-white">
+          {s.incentive.status === 'approved' ? <li><button className="flex w-full items-center gap-3 px-4 py-3 text-left font-semibold text-primary transition-colors hover:bg-primary-light" onClick={() => go('targets')}><span className="h-2.5 w-2.5 rounded-full bg-marigold" />New approved target from the union: publish to members<IconChevron className="ml-auto" /></button></li> : null}
+          {s.queries.filter((q) => q.status === 'open').length ? <li><button className="flex w-full items-center gap-3 px-4 py-3 text-left font-semibold text-primary transition-colors hover:bg-primary-light" onClick={() => go('queries')}><span className="h-2.5 w-2.5 rounded-full bg-marigold" />{s.queries.filter((q) => q.status === 'open').length} member {s.queries.filter((q) => q.status === 'open').length === 1 ? 'query' : 'queries'} waiting<IconChevron className="ml-auto" /></button></li> : null}
+          {s.incentive.status !== 'approved' && !s.queries.some((q) => q.status === 'open') ? <li className="px-4 py-3 text-muted">Nothing pending.</li> : null}
         </ul>
       </div>
     </div>
@@ -77,9 +78,10 @@ function Targets() {
   const [prep, setPrep] = useState(false);
   const [concern, setConcern] = useState('');
   const [showConcern, setShowConcern] = useState(false);
+  const [justSent, setJustSent] = useState(false);
   const worth = worthToFarmer(DEMO_DATES[s.demoDate].date, inc.rate);
   if (inc.status === 'none' || inc.status === 'submitted' || inc.status === 'rejected') {
-    return (<div><PageTitle title="Targets and incentives" /><div className="card border-dashed p-8 text-center text-muted">No approved targets from the union yet. {inc.status === 'submitted' ? 'A proposal is awaiting union approval.' : ''}</div></div>);
+    return (<div><PageTitle title="Targets and incentives" /><div className="rounded-sheet border border-dashed border-line p-10 text-center text-muted">No approved targets from the union yet. {inc.status === 'submitted' ? 'A proposal is awaiting union approval.' : ''}</div></div>);
   }
   const row = (
     <table className="tbl card w-full overflow-hidden">
@@ -96,6 +98,7 @@ function Targets() {
       <div>
         <PageTitle title="Targets and incentives" />{row}
         {inc.status === 'concern' ? <Note>Your concern was sent to the union planner: “{inc.concern}”. The signal stays unpublished until resolved.</Note> : null}
+        {inc.status === 'published' && justSent ? <Delivery /> : null}
         {inc.status === 'published' ? <Note>Published to all eligible members by app and IVR. Members see it as a message from {FARMER.society}.</Note> : null}
       </div>
     );
@@ -109,12 +112,15 @@ function Targets() {
           const msg = signalMessage(l.id, { society: FARMER.society, rate: inc.rate, worth });
           const note = inc.notes[l.id];
           return (
-            <div key={l.id} className="card p-4">
-              <div className="flex items-center justify-between"><span className="label">{l.name}</span><PlayButton text={msg + (note ? ' ' + note : '')} lang={l.id} /></div>
+            <div key={l.id} className="card overflow-hidden">
+              <div className="blockprint h-1.5" />
+              <div className="p-4">
+              <div className="flex items-center justify-between"><span className="font-semibold">{l.name}</span><PlayButton text={msg + (note ? ' ' + note : '')} lang={l.id} /></div>
               <p className="indic mt-2 text-sm">{msg}</p>
-              {note ? <p className="indic mt-2 rounded bg-fill p-2 text-sm">{note}</p> : null}
-              <div className="mt-2 text-[11px] font-bold text-good">Template reviewed</div>
+              {note ? <p className="indic mt-2 animate-view-in rounded-lg bg-marigold-soft p-2 text-sm">{note}</p> : null}
+              <div className="mt-2 flex items-center gap-1 text-[12px] font-semibold text-good"><IconCheck size={14} />Template reviewed</div>
               <Note>Personal figure shown for {FARMER.first}; each member hears their own amount.</Note>
+              </div>
             </div>
           );
         })}
@@ -131,7 +137,7 @@ function Targets() {
         </div>
       </div>
       <div className="mt-4 grid gap-4 md:grid-cols-2">
-        <div className="card p-4 text-sm"><div className="font-bold">Audience</div>All eligible members (412) · App 298 · IVR 114<br /><span className="text-xs text-muted">Feature-phone members get the same message by voice call at the same time.</span></div>
+        <div className="card p-4 text-sm"><div className="font-bold">Audience</div>All eligible members (412): 298 by app, 114 by voice call (IVR)<br /><span className="text-xs text-muted">Feature-phone members get the same message by voice call at the same time.</span></div>
         <div className="card p-4 text-sm"><div className="font-bold">Send at</div>Tomorrow, 8:00 AM (after morning collection)</div>
       </div>
       {showConcern ? (
@@ -144,7 +150,7 @@ function Targets() {
       ) : null}
       <div className="mt-5 flex justify-between">
         <button className="btn-secondary" onClick={() => setShowConcern(true)}>Raise concern</button>
-        <button className="btn-primary" onClick={() => { s.setIncentive({ status: 'published' }); s.log('Rameshbhai (society)', `Published summer buffalo premium (₹${inc.rate}/kg fat, ${PREMIUM_PERIOD.from} to ${PREMIUM_PERIOD.to}) to 412 members`); }}>Publish to members</button>
+        <button className="btn-primary" onClick={() => { setJustSent(true); s.setIncentive({ status: 'published' }); s.log('Rameshbhai (society)', `Published summer buffalo premium (₹${inc.rate}/kg fat, ${PREMIUM_PERIOD.from} to ${PREMIUM_PERIOD.to}) to 412 members`); }}>Publish to members</button>
       </div>
     </div>
   );
@@ -163,11 +169,11 @@ function Members() {
   return (
     <div>
       <PageTitle title="Members" sub="412 members. Showing the first 61." />
-      <div className="mb-3 flex gap-2">{([['all', 'All'], ['interested', 'Interested'], ['not', 'Not heard'], ['ivr', 'IVR only']] as const).map(([k, l]) => <button key={k} onClick={() => setF(k)} className={`rounded-full border px-3 py-1 text-sm ${f === k ? 'border-primary bg-primary-light font-bold text-primary' : 'border-line bg-white'}`}>{l}</button>)}</div>
+      <div className="mb-3"><Segmented options={[{ id: 'all', label: 'All' }, { id: 'interested', label: 'Interested' }, { id: 'not', label: 'Not heard' }, { id: 'ivr', label: 'IVR only' }]} value={f} onChange={(v) => setF(v as typeof f)} /></div>
       <table className="tbl card w-full overflow-hidden">
         <thead><tr><th>ID</th><th>Name</th><th>Phone</th><th>Language</th><th>Avg L/day</th><th>Signal status</th></tr></thead>
         <tbody>{rows.map((r) => (
-          <tr key={r.id} className={r.id === FARMER.memberId ? 'bg-primary-light' : ''}><td>{r.id}</td><td>{r.name}</td><td>{r.phone}</td><td>{r.lang.toUpperCase()}</td><td>{r.litres.toFixed(1)}</td>
+          <tr key={r.id} className={r.id === FARMER.memberId ? 'bg-primary-light' : 'hover:bg-alt'}><td>{r.id}</td><td>{r.name}</td><td>{r.phone}</td><td>{r.lang.toUpperCase()}</td><td className="num">{r.litres.toFixed(1)}</td>
             <td>{r.st === '-' ? <span className="text-muted">-</span> : <Chip tone={r.st === 'Interested' ? 'good' : r.st === 'Heard' ? 'primary' : 'neutral'}>{r.st}</Chip>}</td></tr>
         ))}</tbody>
       </table>
@@ -181,14 +187,14 @@ function Queries() {
   return (
     <div>
       <PageTitle title="Member queries" sub="Questions the assistant could not answer, disputes and data requests (BR-11)." />
-      {s.queries.length === 0 ? <div className="card border-dashed p-8 text-center text-muted">No queries yet.</div> : null}
+      {s.queries.length === 0 ? <div className="rounded-sheet border border-dashed border-line p-10 text-center text-muted">No queries yet. Questions the farmer app cannot answer land here.</div> : null}
       <div className="space-y-3">
         {s.queries.map((q) => (
-          <div key={q.id} className="card p-4">
-            <div className="flex items-center gap-2"><b>{q.id}</b> · {FARMER.name} · {q.lang.toUpperCase()} · <span className="text-xs text-muted">{new Date(q.at).toLocaleString('en-IN')}</span>
+          <div key={q.id} className="card animate-view-in p-4">
+            <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1"><b>{q.id}</b><span>{FARMER.name}</span><Chip>{q.lang.toUpperCase()}</Chip><span className="text-xs text-muted">{new Date(q.at).toLocaleString('en-IN')}</span>
               <span className="ml-auto"><Chip tone={q.status === 'open' ? 'warn' : 'good'}>{q.status}</Chip></span></div>
             <p className="indic mt-2">“{q.text}”</p>
-            {q.reply ? <p className="mt-2 rounded bg-good-light p-2 text-sm">Reply: {q.reply}</p> : (
+            {q.reply ? <p className="mt-2 animate-pop rounded-lg bg-good-light p-2.5 text-sm">Reply: {q.reply}</p> : (
               <div className="mt-2 flex gap-2"><input className="input" placeholder="Type a reply (sent to the farmer in their language)" value={reply[q.id] ?? ''} onChange={(e) => setReply({ ...reply, [q.id]: e.target.value })} />
                 <button className="btn-primary" disabled={!reply[q.id]} onClick={() => s.replyQuery(q.id, reply[q.id])}>Send</button></div>
             )}
@@ -207,12 +213,34 @@ function Reports() {
   return (
     <div>
       <PageTitle title="Reports" />
-      <div className="card p-4"><div className="font-bold">Buffalo milk collection (litres per day, monthly average)</div>
-        <div className="mt-3 h-64"><ResponsiveContainer><BarChart data={apr ? data : data.slice(0, 3)}><CartesianGrid vertical={false} stroke="#ECEAE3" /><XAxis dataKey="m" /><YAxis /><Tooltip /><Legend />
-          <Bar dataKey="buffalo" name="Collected" fill="#1F5FA8" /><Bar dataKey="target" name="Target" fill="#B26B00" /></BarChart></ResponsiveContainer></div>
+      <div className="card p-5"><div className="font-bold">Buffalo milk collection (litres per day, monthly average)</div>
+        <div className="mt-3 h-64"><ResponsiveContainer><BarChart data={apr ? data : data.slice(0, 3)}><CartesianGrid vertical={false} stroke={CHART.grid} /><XAxis dataKey="m" tickLine={false} axisLine={false} /><YAxis tickLine={false} axisLine={false} /><Tooltip cursor={{ fill: '#F3F5F9' }} /><Legend iconType="circle" />
+          <Bar dataKey="buffalo" name="Collected" fill={CHART.indigo} radius={[6, 6, 0, 0]} /><Bar dataKey="target" name="Target" fill={CHART.marigold} radius={[6, 6, 0, 0]} /></BarChart></ResponsiveContainer></div>
         <Note>Demo figures. Lean-season fall is expected; the target is set against last year&apos;s April.</Note>
       </div>
-      {published && apr ? <div className="card mt-4 p-4 text-sm"><b>Premium paid to members in April (society total):</b> {inr(2310 * 30 * 1.03 * 0.07 * s.incentive.rate)}</div> : null}
+      {published && apr ? <div className="mt-4 max-w-[420px]"><Stat label="Premium paid to members in April (society total)" value={inr(2310 * 30 * 1.03 * 0.07 * s.incentive.rate)} tone="good" /></div> : null}
+    </div>
+  );
+}
+
+// Shown once, right after Publish: each dot is a member; they light up as the message goes out.
+function Delivery() {
+  const total = 412, app = 298;
+  return (
+    <div className="mt-5 max-w-[720px] animate-view-in rounded-sheet border border-line bg-white p-5">
+      <div className="flex items-baseline justify-between gap-4">
+        <div className="flex items-center gap-2 font-bold text-good"><IconCheck size={20} animate />Published</div>
+        <div className="text-[15px]"><span className="num font-display text-[26px] font-bold"><Count value={total} format={(n) => String(Math.round(n))} /></span> <span className="text-muted">members reached</span></div>
+      </div>
+      <div className="mt-3 grid gap-[3px]" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(9px, 1fr))' }} aria-hidden>
+        {Array.from({ length: total }).map((_, i) => (
+          <span key={i} className="aspect-square rounded-full" style={{ background: i < app ? CHART.indigo : CHART.marigold, opacity: 0, animation: `pop 260ms ease-out ${Math.round((i / total) * 1100)}ms forwards` }} />
+        ))}
+      </div>
+      <div className="mt-3 flex gap-5 text-[13px] text-muted">
+        <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full" style={{ background: CHART.indigo }} />App, {app}</span>
+        <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full" style={{ background: CHART.marigold }} />Voice call, {total - app}</span>
+      </div>
     </div>
   );
 }
