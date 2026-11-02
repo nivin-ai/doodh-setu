@@ -25,7 +25,7 @@ interface State {
   lang: Lang;
   autoplay: boolean;
   plannerUser: 'planner' | 'approver';
-  incentive: { status: IncentiveStatus; rate: number; ids: number[]; submittedBy?: string; approvedBy?: string; concern?: string; reason?: string; notes: Record<Lang, string> };
+  incentive: { status: IncentiveStatus; rate: number; ids: number[]; submittedBy?: string; approvedBy?: string; concern?: string; reason?: string; notes: Partial<Record<Lang, string>> };
   farmer: { heard: boolean; interested: boolean; correction: boolean; signalConsent: boolean };
   consents: Consent[];
   queries: Query[];

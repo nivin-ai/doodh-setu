@@ -4,7 +4,7 @@ export const runtime = 'nodejs';
 export const maxDuration = 30;
 
 // Gnani.ai Vachana speech-to-text (REST, max 30 s audio). Docs: https://docs.gnani.ai/api/STT/speech-to-text
-const CODES: Record<string, string> = { gu: 'gu-IN', hi: 'hi-IN', en: 'en-IN' };
+const CODES: Record<string, string> = { gu: 'gu-IN', hi: 'hi-IN', en: 'en-IN', mr: 'mr-IN', bn: 'bn-IN', te: 'te-IN', ta: 'ta-IN', kn: 'kn-IN', ml: 'ml-IN' };
 
 export async function POST(req: NextRequest) {
   const key = process.env.GNANI_API_KEY;
@@ -12,10 +12,11 @@ export async function POST(req: NextRequest) {
   const form = await req.formData();
   const audio = form.get('audio_file');
   const lang = String(form.get('language') ?? 'gu');
+  if (!CODES[lang]) return NextResponse.json({ error: `Gnani STT does not support ${lang}` }, { status: 422 });
   if (!(audio instanceof Blob)) return NextResponse.json({ error: 'audio_file required' }, { status: 400 });
   const out = new FormData();
   out.append('audio_file', audio, 'question.wav');
-  out.append('language_code', CODES[lang] ?? 'gu-IN');
+  out.append('language_code', CODES[lang]);
   out.append('model', process.env.GNANI_STT_MODEL || 'prisma-v3.0');
   out.append('format', 'transcribe');
   const r = await fetch('https://api.vachana.ai/stt/v3', { method: 'POST', headers: { 'X-API-Key-ID': key }, body: out });

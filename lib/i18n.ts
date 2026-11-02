@@ -1,12 +1,25 @@
-// Farmer-facing strings in Gujarati, Hindi and English.
+// Farmer-facing strings. Gujarati, Hindi and English here; seven more languages in i18n-more.ts.
 // Starter translations for the prototype: to be reviewed by native speakers before field use.
-export type Lang = 'gu' | 'hi' | 'en';
-export const LANGS: { id: Lang; label: string; code: string }[] = [
-  { id: 'gu', label: 'ગુજરાતી', code: 'gu-IN' },
-  { id: 'hi', label: 'हिन्दी', code: 'hi-IN' },
-  { id: 'en', label: 'English', code: 'en-IN' },
+import { bn, kn, ml, mr, or, ta, te } from './i18n-more';
+import { PHRASES } from './phrases';
+
+export type Lang = 'gu' | 'hi' | 'en' | 'mr' | 'ml' | 'bn' | 'te' | 'kn' | 'ta' | 'or';
+// native = name in its own script (shown in the picker), name = English name (for staff screens)
+export const LANGS: { id: Lang; native: string; name: string; code: string }[] = [
+  { id: 'gu', native: 'ગુજરાતી', name: 'Gujarati', code: 'gu-IN' },
+  { id: 'hi', native: 'हिन्दी', name: 'Hindi', code: 'hi-IN' },
+  { id: 'en', native: 'English', name: 'English', code: 'en-IN' },
+  { id: 'mr', native: 'मराठी', name: 'Marathi', code: 'mr-IN' },
+  { id: 'bn', native: 'বাংলা', name: 'Bengali', code: 'bn-IN' },
+  { id: 'te', native: 'తెలుగు', name: 'Telugu', code: 'te-IN' },
+  { id: 'ta', native: 'தமிழ்', name: 'Tamil', code: 'ta-IN' },
+  { id: 'kn', native: 'ಕನ್ನಡ', name: 'Kannada', code: 'kn-IN' },
+  { id: 'ml', native: 'മലയാളം', name: 'Malayalam', code: 'ml-IN' },
+  { id: 'or', native: 'ଓଡ଼ିଆ', name: 'Odia', code: 'or-IN' },
 ];
-export const LANG_CODE: Record<Lang, string> = { gu: 'gu-IN', hi: 'hi-IN', en: 'en-IN' };
+export const LANG_CODE = Object.fromEntries(LANGS.map((l) => [l.id, l.code])) as Record<Lang, string>;
+// Gnani speech-to-text covers these; others fall back to the browser or typing
+export const STT_LANGS: Lang[] = ['gu', 'hi', 'en', 'mr', 'bn', 'te', 'ta', 'kn', 'ml'];
 
 type Dict = Record<string, string>;
 const en: Dict = {
@@ -141,21 +154,13 @@ const gu: Dict = {
   offline: 'ઑફલાઇન. સાચવેલી માહિતી બતાવી રહ્યા છીએ.', listen: 'સાંભળો', voiceSource: 'અવાજ',
 };
 
-export const STRINGS: Record<Lang, Dict> = { en, hi, gu };
-export const t = (lang: Lang, key: string) => STRINGS[lang][key] ?? STRINGS.en[key] ?? key;
+export const STRINGS: Record<Lang, Dict> = { en, hi, gu, mr, ml, bn, te, kn, ta, or };
+export const t = (lang: Lang, key: string) => STRINGS[lang]?.[key] ?? STRINGS.en[key] ?? key;
 
 // Signal message templates (reviewed templates, FRD Section 12). Values are filled in.
 export function signalMessage(lang: Lang, v: { society: string; rate: number; worth: number }) {
-  if (lang === 'gu') return `${v.society} તરફથી સંદેશ: એપ્રિલથી જૂન સુધી ભેંસના દૂધ પર દર કિલો ફેટે ${v.rate} રૂપિયા વધારાના મળશે. આ દર આખા સમયગાળા માટે નક્કી છે. તમારા દૂધ પ્રમાણે આ આશરે મહિને ${v.worth} રૂપિયા થાય.`;
-  if (lang === 'hi') return `${v.society} की ओर से संदेश: अप्रैल से जून तक भैंस के दूध पर हर किलो फैट पर ${v.rate} रुपये अतिरिक्त मिलेंगे। यह दर पूरी अवधि के लिए तय है। आपके दूध के हिसाब से यह लगभग ${v.worth} रुपये महीना होगा।`;
-  return `Message from ${v.society}: from April to June, buffalo milk earns ${v.rate} rupees extra per kg of fat. This rate is fixed for the whole period. For your milk, this is about ${v.worth} rupees a month.`;
+  return (PHRASES[lang] ?? PHRASES.en).signal(v.society, v.rate, v.worth);
 }
-
-export const SIGNAL_TITLE: Record<Lang, string> = {
-  gu: 'ઉનાળામાં ભેંસના દૂધ પર પ્રીમિયમ', hi: 'गर्मी में भैंस के दूध पर प्रीमियम', en: 'Summer buffalo milk premium',
-};
-export const SIGNAL_NEED: Record<Lang, (rate: number) => string[]> = {
-  gu: (r) => ['એપ્રિલથી જૂન સુધી વધુ ભેંસનું દૂધ', `દર કિલો ફેટે ₹${r} વધારાના, આખા સમયગાળા માટે નક્કી`],
-  hi: (r) => ['अप्रैल से जून तक ज़्यादा भैंस का दूध', `हर किलो फैट पर ₹${r} अतिरिक्त, पूरी अवधि के लिए तय`],
-  en: (r) => ['More buffalo milk, April to June', `Extra ₹${r} per kg fat, fixed for the period`],
-};
+export const SIGNAL_TITLE = Object.fromEntries(LANGS.map((l) => [l.id, PHRASES[l.id].title])) as Record<Lang, string>;
+export const SIGNAL_NEED = Object.fromEntries(LANGS.map((l) => [l.id, PHRASES[l.id].need])) as Record<Lang, (rate: number) => string[]>;
+export { PHRASES };

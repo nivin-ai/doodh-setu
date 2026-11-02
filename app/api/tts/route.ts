@@ -8,6 +8,14 @@ const VOICES: Record<string, { voice: string; language: string }> = {
   gu: { voice: process.env.GNANI_VOICE_GU || 'Veera', language: 'gu-IN' },
   hi: { voice: process.env.GNANI_VOICE_HI || 'Nalini', language: 'hi-IN' },
   en: { voice: process.env.GNANI_VOICE_EN || 'Kaveri', language: 'en-IN' },
+  mr: { voice: process.env.GNANI_VOICE_MR || 'Zahira', language: 'mr-IN' },
+  bn: { voice: process.env.GNANI_VOICE_BN || 'Kirra', language: 'bn-IN' },
+  te: { voice: process.env.GNANI_VOICE_TE || 'Suhana', language: 'te-IN' },
+  ta: { voice: process.env.GNANI_VOICE_TA || 'Asmita', language: 'ta-IN' },
+  kn: { voice: process.env.GNANI_VOICE_KN || 'Saanvi', language: 'kn-IN' },
+  ml: { voice: process.env.GNANI_VOICE_ML || 'Reshma', language: 'ml-IN' },
+  // Odia is not in Gnani's timbre-v2.5 voice list; only used if a voice is configured, else the browser voice is used
+  ...(process.env.GNANI_VOICE_OR ? { or: { voice: process.env.GNANI_VOICE_OR, language: 'or-IN' } } : {}),
 };
 
 export async function POST(req: NextRequest) {
@@ -15,7 +23,8 @@ export async function POST(req: NextRequest) {
   if (!key) return NextResponse.json({ error: 'GNANI_API_KEY not set' }, { status: 501 });
   const { text, lang } = (await req.json()) as { text?: string; lang?: string };
   if (!text || text.length > 1200) return NextResponse.json({ error: 'text required (max 1200 chars)' }, { status: 400 });
-  const v = VOICES[lang ?? 'gu'] ?? VOICES.gu;
+  const v = VOICES[lang ?? 'gu'];
+  if (!v) return NextResponse.json({ error: `No Gnani voice for ${lang}` }, { status: 422 });
   const r = await fetch('https://api.vachana.ai/api/v1/tts/inference', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'X-API-Key-ID': key },

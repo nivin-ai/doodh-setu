@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { useStore } from '@/lib/store';
 import { DEMO_DATES, FARMER, PREMIUM_PERIOD } from '@/lib/demo';
-import { signalMessage, type Lang } from '@/lib/i18n';
+import { LANGS, signalMessage, type Lang } from '@/lib/i18n';
 import { worthToFarmer } from '@/lib/farmer';
 import { gauss, inr, mulberry32, num } from '@/lib/util';
 import { CHART, Chip, ConsoleShell, Count, Note, PageTitle, PlayButton, Segmented, Stat } from './ui';
@@ -103,7 +103,8 @@ function Targets() {
       </div>
     );
   }
-  const langs: { id: Lang; name: string }[] = [{ id: 'gu', name: 'Gujarati' }, { id: 'hi', name: 'Hindi' }, { id: 'en', name: 'English' }];
+  // Languages this society's members use (Savitaben's own choice included); templates exist for all ten
+  const langs = LANGS.filter((l) => ['gu', 'hi', 'en', s.lang].includes(l.id));
   return (
     <div>
       <PageTitle title="Prepare member message" chip={<Chip tone="good">Approved by union</Chip>} sub={`Target: +6% buffalo milk, Apr to Jun | Premium ₹${inc.rate} per kg fat (fixed). The amount cannot be edited here.`} />
@@ -127,11 +128,11 @@ function Targets() {
       </div>
       <div className="card mt-4 p-4">
         <div className="font-bold">Local note (optional)</div>
-        <p className="text-xs text-muted">Gnani.ai provides voice, not translation. Write the note in each language, or leave the other languages blank to send the template only.</p>
+        <p className="text-xs text-muted">Reviewed templates exist in 10 languages; the cards above are the languages your members use. Gnani.ai provides voice, not translation. Write the note in each language, or leave the other languages blank to send the template only.</p>
         <div className="mt-3 grid gap-3 lg:grid-cols-3">
           {langs.map((l) => (
             <label key={l.id} className="block text-sm"><span className="font-bold">{l.name}</span>
-              <textarea className="input indic mt-1 h-20" value={inc.notes[l.id]} onChange={(e) => s.setIncentive({ notes: { ...inc.notes, [l.id]: e.target.value } })}
+              <textarea className="input indic mt-1 h-20" value={inc.notes[l.id] ?? ''} onChange={(e) => s.setIncentive({ notes: { ...inc.notes, [l.id]: e.target.value } })}
                 placeholder={l.id === 'en' ? 'e.g. Subsidised maize seed at the society from 1 March.' : ''} /></label>
           ))}
         </div>
@@ -163,7 +164,7 @@ function Members() {
   const published = s.incentive.status === 'published';
   const status = (hp: number, ip: number) => !published ? '-' : ip < (apr ? 0.27 : 0.18) ? 'Interested' : hp < (apr ? 0.86 : 0.68) ? 'Heard' : 'Not heard';
   const rows = [
-    { id: FARMER.memberId, name: FARMER.name, phone: 'Smartphone', lang: 'gu' as Lang, litres: 16, st: !published ? '-' : s.farmer.interested ? 'Interested' : s.farmer.heard ? 'Heard' : 'Not heard' },
+    { id: FARMER.memberId, name: FARMER.name, phone: 'Smartphone', lang: s.lang, litres: 16, st: !published ? '-' : s.farmer.interested ? 'Interested' : s.farmer.heard ? 'Heard' : 'Not heard' },
     ...MEMBERS.slice(0, 60).map((m) => ({ id: m.id, name: m.name, phone: m.phone, lang: m.lang, litres: m.litres, st: status(m.heardP, m.interestedP) })),
   ].filter((r) => f === 'all' || (f === 'interested' && r.st === 'Interested') || (f === 'not' && r.st === 'Not heard') || (f === 'ivr' && r.phone.startsWith('Feature')));
   return (

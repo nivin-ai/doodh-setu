@@ -4,7 +4,7 @@
 
 :root { color-scheme: light; }
 html, body { background: #F3F5F9; color: #171A26; }
-body { font-family: 'Mukta Vaani', 'Mukta', system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
+body { font-family: 'Mukta Vaani', 'Mukta', 'Noto Sans Bengali', 'Noto Sans Telugu', 'Noto Sans Tamil', 'Noto Sans Kannada', 'Noto Sans Malayalam', 'Noto Sans Oriya', system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
 .indic { line-height: 1.5; }
 .num { font-variant-numeric: tabular-nums; }
 :focus-visible { outline: 2px solid #26347F; outline-offset: 2px; border-radius: 6px; }

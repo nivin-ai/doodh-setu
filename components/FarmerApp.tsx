@@ -3,7 +3,7 @@ import { createContext, useContext, useEffect, useMemo, useRef, useState } from 
 import { Bar, BarChart, Cell, ResponsiveContainer, XAxis, YAxis, Tooltip, LabelList } from 'recharts';
 import { useStore, activePremium, type AppStatus } from '@/lib/store';
 import { DEMO_DATES, FARMER } from '@/lib/demo';
-import { LANGS, SIGNAL_NEED, SIGNAL_TITLE, signalMessage, t, type Lang } from '@/lib/i18n';
+import { LANGS, LANG_CODE, PHRASES, SIGNAL_NEED, SIGNAL_TITLE, STT_LANGS, signalMessage, t, type Lang } from '@/lib/i18n';
 import { dayTotals, explainChange, monthKeysUpTo, monthSummary, worthToFarmer, type MonthSummary } from '@/lib/farmer';
 import { answer } from '@/lib/ask';
 import { browserRecognition, recordWav, speak, transcribe, voiceHealth, type Recorder } from '@/lib/voice';
@@ -72,12 +72,7 @@ export default function FarmerApp() {
         <div className="flex items-center gap-2 px-4 pb-3 pt-3.5">
           {sub ? <button aria-label={T('back')} className="-ml-1 flex h-9 w-9 items-center justify-center rounded-full hover:bg-white/10" onClick={() => setSub(null)}><IconBack /></button> : null}
           <div className="flex-1 truncate font-display text-[21px] font-bold leading-none">{sub === 'profile' ? T('profile') : T('appName')}</div>
-          <div className="flex rounded-full bg-white/10 p-0.5 text-[12px] font-semibold" role="group" aria-label={T('language')}>
-            {LANGS.map((l) => (
-              <button key={l.id} onClick={() => s.set({ lang: l.id })} aria-pressed={lang === l.id}
-                className={`rounded-full px-2.5 py-1 transition-colors ${lang === l.id ? 'bg-marigold text-ink' : 'text-white/80 hover:text-white'}`}>{l.id === 'gu' ? 'ગુ' : l.id === 'hi' ? 'हि' : 'En'}</button>
-            ))}
-          </div>
+          <LangSelect lang={lang} onChange={(l) => s.set({ lang: l })} label={T('language')} />
           <button aria-label={T('profile')} onClick={() => setSub('profile')} className="flex h-9 w-9 items-center justify-center rounded-full bg-white/10 hover:bg-white/20"><IconUser /></button>
         </div>
       </header>
@@ -129,10 +124,8 @@ function Home() {
   const diff = cur.total - prevTotal;
   const good = d.snf >= 8.8;
   const litres = d.am + d.pm;
-  const milkText = lang === 'gu' ? `આજે સવારે ${d.am.toFixed(1)} લિટર, સાંજે ${d.pm.toFixed(1)} લિટર. ફેટ ${d.fat.toFixed(1)} ટકા, એસએનએફ ${d.snf.toFixed(1)} ટકા. આજની રકમ ${d.amount} રૂપિયા.`
-    : lang === 'hi' ? `आज सुबह ${d.am.toFixed(1)} लीटर, शाम ${d.pm.toFixed(1)} लीटर। फैट ${d.fat.toFixed(1)} प्रतिशत, एसएनएफ ${d.snf.toFixed(1)} प्रतिशत। आज की राशि ${d.amount} रुपये।`
-    : `Today ${d.am.toFixed(1)} litres in the morning and ${d.pm.toFixed(1)} in the evening. Fat ${d.fat.toFixed(1)} percent, SNF ${d.snf.toFixed(1)} percent. Today's amount ${d.amount} rupees.`;
-  const monthText = lang === 'gu' ? `આ મહિને અત્યાર સુધી ${cur.total} રૂપિયા.` : lang === 'hi' ? `इस महीने अब तक ${cur.total} रुपये।` : `This month so far ${cur.total} rupees.`;
+  const milkText = PHRASES[lang].milk(d.am.toFixed(1), d.pm.toFixed(1), d.fat.toFixed(1), d.snf.toFixed(1), d.amount);
+  const monthText = PHRASES[lang].month(cur.total);
   return (
     <div className="space-y-3.5">
       <div className="pt-1">
@@ -253,7 +246,7 @@ function Earnings() {
   const [sel, setSel] = useState(months.length - 1);
   const m = months[sel];
   const data = months.map((x) => ({ m: MONTHS[Number(x.key.slice(5)) - 1], v: x.total }));
-  const text = lang === 'gu' ? `${fmtMonth(m.key)} માં ${Math.round(m.litres)} લિટર, કુલ ${m.total} રૂપિયા.` : lang === 'hi' ? `${fmtMonth(m.key)} में ${Math.round(m.litres)} लीटर, कुल ${m.total} रुपये।` : `${fmtMonth(m.key)}: ${Math.round(m.litres)} litres, total ${m.total} rupees.`;
+  const text = PHRASES[lang].statement(fmtMonth(m.key), Math.round(m.litres), m.total);
   return (
     <div className="space-y-3">
       <div className="card rounded-sheet p-3">
@@ -509,10 +502,12 @@ function Ask() {
   const [said, setSaid] = useState<string | null>(null);
   const [ans, setAns] = useState<ReturnType<typeof answer> | null>(null);
   const [state, setState] = useState<'idle' | 'listening' | 'working' | 'error'>('idle');
-  const [mode, setMode] = useState<'gnani' | 'browser' | 'none'>('none');
+  const [gnaniOn, setGnaniOn] = useState(false);
+  const [hasBrowser, setHasBrowser] = useState(false);
+  const mode: 'gnani' | 'browser' | 'none' = gnaniOn && STT_LANGS.includes(lang) ? 'gnani' : hasBrowser ? 'browser' : 'none';
   const [fb, setFb] = useState<string | null>(null);
   const rec = useRef<Recorder | null>(null);
-  useEffect(() => { voiceHealth().then((h) => setMode(h.gnani ? 'gnani' : browserRecognition() ? 'browser' : 'none')); }, []);
+  useEffect(() => { setHasBrowser(!!browserRecognition()); voiceHealth().then((h) => setGnaniOn(h.gnani)); }, []);
   const run = (text: string, voice: boolean) => {
     setSaid(text); setFb(null);
     const a = answer(text, lang, today, premium); setAns(a);
@@ -530,7 +525,7 @@ function Ask() {
           if (tx) { setState('idle'); run(tx, true); } else setState('error');
         });
       } else if (mode === 'browser') {
-        const R = browserRecognition()!; const r = new R(); r.lang = { gu: 'gu-IN', hi: 'hi-IN', en: 'en-IN' }[lang]; r.interimResults = false; r.maxAlternatives = 1;
+        const R = browserRecognition()!; const r = new R(); r.lang = LANG_CODE[lang]; r.interimResults = false; r.maxAlternatives = 1;
         r.onresult = (e) => { setState('idle'); run(e.results[0][0].transcript, true); };
         r.onerror = () => setState('error'); r.onend = () => setState((x) => (x === 'listening' ? 'idle' : x));
         rec.current = { stop: () => r.stop() }; r.start();
@@ -578,7 +573,7 @@ function Profile() {
       <div className="card rounded-sheet p-4"><div className="font-bold">{FARMER.name}</div><div className="text-sm text-muted">{FARMER.society}, {T('member')} {FARMER.memberId}, {FARMER.village}</div>
         <div className="text-sm text-muted">{FARMER.animals.buffalo} buffaloes, {FARMER.animals.cow} cow</div></div>
       <div className="card rounded-sheet p-4"><div className="label">{T('language')}</div>
-        <div className="mt-2 flex gap-2">{LANGS.map((l) => <button key={l.id} onClick={() => s.set({ lang: l.id })} className={`rounded-full border px-3.5 py-1.5 transition-colors ${lang === l.id ? 'border-primary bg-primary text-white' : 'border-line bg-white'}`}>{l.label}</button>)}</div>
+        <div className="mt-2 grid grid-cols-2 gap-2">{LANGS.map((l) => <button key={l.id} onClick={() => s.set({ lang: l.id })} aria-pressed={lang === l.id} className={`flex items-center justify-between rounded-xl border px-3.5 py-2 text-left transition-colors ${lang === l.id ? 'border-primary bg-primary text-white' : 'border-line bg-white hover:bg-alt'}`}><span>{l.native}</span>{lang === l.id ? <IconCheck size={16} /> : <span className="text-[12px] text-muted">{l.name}</span>}</button>)}</div>
         <label className="mt-3 flex items-center gap-2 text-sm"><input type="checkbox" checked={s.autoplay} onChange={(e) => s.set({ autoplay: e.target.checked })} /> Play messages aloud automatically</label>
       </div>
       <div className="card rounded-sheet p-4"><div className="label">{T('myData')}</div><p className="mt-1 text-[15px]">{T('myDataText')}</p>
@@ -594,5 +589,20 @@ function Profile() {
       </div>
       <p className="text-xs text-muted">Grievance officer (demo): grievance@doodhsetu.example, Your data stays in India.</p>
     </div>
+  );
+}
+
+// Language picker in the header: a native select, so phones show their own list
+function LangSelect({ lang, onChange, label }: { lang: Lang; onChange: (l: Lang) => void; label: string }) {
+  return (
+    <label className="relative flex items-center">
+      <span className="sr-only">{label}</span>
+      <svg className="pointer-events-none absolute left-2.5 text-marigold" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden><circle cx="12" cy="12" r="9" /><path d="M3 12h18M12 3c2.5 2.8 3.8 5.8 3.8 9s-1.3 6.2-3.8 9c-2.5-2.8-3.8-5.8-3.8-9S9.5 5.8 12 3Z" /></svg>
+      <select aria-label={label} value={lang} onChange={(e) => onChange(e.target.value as Lang)}
+        className="h-9 max-w-[140px] cursor-pointer appearance-none truncate rounded-full border-0 bg-white/10 pl-8 pr-7 text-[14px] font-semibold text-white outline-none transition-colors hover:bg-white/20 focus-visible:ring-2 focus-visible:ring-marigold [&>option]:text-ink">
+        {LANGS.map((l) => <option key={l.id} value={l.id}>{l.native}</option>)}
+      </select>
+      <svg className="pointer-events-none absolute right-2.5 text-white/80" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" aria-hidden><path d="m6 9 6 6 6-6" /></svg>
+    </label>
   );
 }

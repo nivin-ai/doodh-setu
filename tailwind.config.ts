@@ -20,8 +20,10 @@ const config: Config = {
         console: '#1B2560',
       },
       fontFamily: {
-        sans: ['"Mukta Vaani"', 'Mukta', 'system-ui', 'sans-serif'],
-        display: ['"Baloo Bhai 2"', '"Baloo 2"', '"Mukta Vaani"', 'system-ui', 'sans-serif'],
+        // Mukta covers Latin, Devanagari and Gujarati; Noto Sans fills the other scripts glyph by glyph
+        sans: ['"Mukta Vaani"', 'Mukta', '"Noto Sans Bengali"', '"Noto Sans Telugu"', '"Noto Sans Tamil"', '"Noto Sans Kannada"', '"Noto Sans Malayalam"', '"Noto Sans Oriya"', 'system-ui', 'sans-serif'],
+        // Baloo has a sister family per script, so amounts and headings keep one voice in every language
+        display: ['"Baloo Bhai 2"', '"Baloo 2"', '"Baloo Da 2"', '"Baloo Tammudu 2"', '"Baloo Thambi 2"', '"Baloo Tamma 2"', '"Baloo Chettan 2"', '"Baloo Bhaina 2"', '"Mukta Vaani"', 'system-ui', 'sans-serif'],
       },
       borderRadius: { sheet: '18px' },
       keyframes: {
