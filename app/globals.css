@@ -46,3 +46,9 @@ body { font-family: 'Mukta Vaani', 'Mukta', system-ui, sans-serif; -webkit-font-
 @keyframes travel { from { offset-distance: 0%; } to { offset-distance: 100%; } }
 @keyframes dash { to { stroke-dashoffset: -32; } }
 @keyframes fly { 0% { transform: translate(0,0) scale(1); opacity: 1; } 100% { transform: translate(var(--dx), var(--dy)) scale(.4); opacity: 0; } }
+
+/* Demand map */
+.zone-map { background: #EEF1F6; font-family: inherit; }
+.zone-map path.leaflet-interactive { transition: fill 450ms ease, stroke 200ms ease; }
+.zone-map .leaflet-control-attribution { font-size: 10px; }
+.leaflet-tooltip.zone-tip { border: 0; border-radius: 10px; padding: 6px 10px; font: 13px/1.35 'Mukta Vaani', 'Mukta', system-ui, sans-serif; color: #171A26; box-shadow: 0 6px 18px -8px rgba(23,26,38,.45); }

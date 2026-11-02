@@ -11,6 +11,7 @@ import { CAP_SHARE, FAIRNESS_MIN, MONTHS_LEAN, SOCIETIES, SOURCES, SUGGESTED_IDS
 import { fmtDate, inr, inrShort, num, pct } from '@/lib/util';
 import { CHART, Chip, ConsoleShell, Count, Note, PageTitle, Segmented, Stat } from './ui';
 import { IconCheck, IconChevron } from './icons';
+import DemandMap from './DemandMap';
 
 const pill = (on: boolean) => `rounded-full border px-3 py-1 text-sm transition-colors ${on ? 'border-primary bg-primary font-semibold text-white' : 'border-line bg-white hover:bg-alt'}`;
 const axis = { tickLine: false, axisLine: false, fontSize: 11, stroke: '#5B6275' } as const;
@@ -21,7 +22,7 @@ export default function PlannerApp() {
   const s = useStore();
   const [view, setView] = useState('health');
   const menu = [
-    { id: 'health', label: 'Data health' }, { id: 'demand', label: 'Demand and forecast' }, { id: 'mix', label: 'Product mix' },
+    { id: 'health', label: 'Data health' }, { id: 'demand', label: 'Demand and forecast' }, { id: 'map', label: 'Demand map' }, { id: 'mix', label: 'Product mix' },
     { id: 'gap', label: 'Milk gap' }, { id: 'incentive', label: 'Incentive designer' },
     { id: 'approvals', label: 'Approvals', badge: s.incentive.status === 'submitted' || s.incentive.status === 'concern' ? 1 : 0 },
     { id: 'monitor', label: 'Monitor and report' },
@@ -31,7 +32,7 @@ export default function PlannerApp() {
       right={<label className="flex items-center gap-2 text-white/75">Signed in as
         <select className="rounded-full border-0 bg-white/10 px-3 py-1 text-white outline-none [&>option]:text-ink" value={s.plannerUser} onChange={(e) => s.set({ plannerUser: e.target.value as 'planner' | 'approver' })}>
           <option value="planner">{USERS.planner}</option><option value="approver">{USERS.approver}</option></select></label>}>
-      {view === 'health' ? <Health /> : view === 'demand' ? <Demand /> : view === 'mix' ? <Mix /> : view === 'gap' ? <Gap go={setView} /> : view === 'incentive' ? <Incentive go={setView} /> : view === 'approvals' ? <Approvals /> : <Monitor />}
+      {view === 'health' ? <Health /> : view === 'demand' ? <Demand /> : view === 'map' ? <DemandMap /> : view === 'mix' ? <Mix /> : view === 'gap' ? <Gap go={setView} /> : view === 'incentive' ? <Incentive go={setView} /> : view === 'approvals' ? <Approvals /> : <Monitor />}
     </ConsoleShell>
   );
 }
