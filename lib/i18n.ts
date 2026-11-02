@@ -164,3 +164,33 @@ export function signalMessage(lang: Lang, v: { society: string; rate: number; wo
 export const SIGNAL_TITLE = Object.fromEntries(LANGS.map((l) => [l.id, PHRASES[l.id].title])) as Record<Lang, string>;
 export const SIGNAL_NEED = Object.fromEntries(LANGS.map((l) => [l.id, PHRASES[l.id].need])) as Record<Lang, (rate: number) => string[]>;
 export { PHRASES };
+
+// ---------- Monthly milk story (BRD FR-G8, FRD FW12). Starter translations: review before field use. ----------
+const STORY_BASE: Partial<Record<Lang, Record<string, string>>> = {
+  en: { label: 'Milk story', title: 'Where your milk goes this summer', per100: 'Out of every 100 litres from your society', litres: 'litres',
+    why: 'Cities buy more curd, lassi and ice cream in the heat, so less milk goes to low-value powder. Better use of each litre supports the price you receive.', new: 'New', open: 'See where it goes' },
+  hi: { label: 'दूध की बात', title: 'इस गर्मी में आपका दूध कहाँ जाता है', per100: 'आपकी मंडली के हर 100 लीटर में से', litres: 'लीटर',
+    why: 'गर्मी में शहरों में दही, लस्सी और आइसक्रीम की माँग बढ़ती है, इसलिए कम दूध सस्ते पाउडर में जाता है। हर लीटर का बेहतर उपयोग आपके भाव को सहारा देता है।', new: 'नया', open: 'देखें दूध कहाँ जाता है' },
+  gu: { label: 'દૂધની વાત', title: 'આ ઉનાળામાં તમારું દૂધ ક્યાં જાય છે', per100: 'તમારી મંડળીના દર 100 લિટરમાંથી', litres: 'લિટર',
+    why: 'ગરમીમાં શહેરોમાં દહીં, લસ્સી અને આઇસક્રીમની માંગ વધે છે, તેથી ઓછું દૂધ ઓછી કિંમતના પાવડરમાં જાય છે. દરેક લિટરનો સારો ઉપયોગ તમારા ભાવને ટેકો આપે છે.', new: 'નવું', open: 'દૂધ ક્યાં જાય છે તે જુઓ' },
+};
+
+const STORY_PRODUCT_BASE: Partial<Record<Lang, Record<string, string>>> = {
+  en: { milk: 'liquid milk', curd: 'curd', paneer: 'paneer', lassi: 'lassi and buttermilk', icecream: 'ice cream', sink: 'milk powder and butter' },
+  hi: { milk: 'पाउच दूध', curd: 'दही', paneer: 'पनीर', lassi: 'लस्सी और छाछ', icecream: 'आइसक्रीम', sink: 'पाउडर और मक्खन' },
+  gu: { milk: 'પાઉચ દૂધ', curd: 'દહીં', paneer: 'પનીર', lassi: 'લસ્સી અને છાશ', icecream: 'આઇસક્રીમ', sink: 'પાવડર અને માખણ' },
+};
+
+// Other languages use English until reviewed translations are added.
+export const STORY = Object.fromEntries(LANGS.map((l) => [l.id, STORY_BASE[l.id] ?? STORY_BASE.en!])) as Record<Lang, Record<string, string>>;
+export const STORY_PRODUCT = Object.fromEntries(LANGS.map((l) => [l.id, STORY_PRODUCT_BASE[l.id] ?? STORY_PRODUCT_BASE.en!])) as Record<Lang, Record<string, string>>;
+
+export function storyMessage(lang: Lang, society: string, shares: { id: string; share: number }[]) {
+  const items = [...shares].sort((a, b) => b.share - a.share);
+  const n = (id: string) => STORY_PRODUCT[lang][id];
+  const S = STORY[lang];
+  if (lang === 'gu') return `${society} તરફથી સંદેશ: ${S.title}. આપણી મંડળીના દર 100 લિટર દૂધમાંથી આશરે ${items.map((i) => `${i.share} લિટર ${n(i.id)}`).join(', ')}માં જાય છે. ${S.why}`;
+  if (lang === 'hi') return `${society} की ओर से संदेश: ${S.title}। हमारी मंडली के हर 100 लीटर दूध में से लगभग ${items.map((i) => `${i.share} लीटर ${n(i.id)}`).join(', ')} में जाता है। ${S.why}`;
+  const list = items.map((i, k) => (k === 0 ? `about ${i.share} litres go to ${n(i.id)}` : `${i.share} to ${n(i.id)}`));
+  return `Message from ${society}: ${S.title}. Out of every 100 litres from our society, ${list.slice(0, -1).join(', ')} and ${list.at(-1)}. ${S.why}`;
+}

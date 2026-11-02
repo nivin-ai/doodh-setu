@@ -112,7 +112,7 @@ export function ConsoleShell({ title, place, menu, active, onSelect, right, chil
         <div className="ml-auto flex items-center gap-3 text-sm">{right}</div>
       </header>
       <div className="md:flex">
-        <nav className="sticky top-0 hidden h-[calc(100vh-88px)] w-[228px] shrink-0 border-r border-line bg-white px-3 py-4 md:block" aria-label="Sections">
+        {menu.length ? <><nav className="sticky top-0 hidden h-[calc(100vh-88px)] w-[228px] shrink-0 border-r border-line bg-white px-3 py-4 md:block" aria-label="Sections">
           {menu.map((m) => {
             const on = active === m.id;
             return (
@@ -127,7 +127,7 @@ export function ConsoleShell({ title, place, menu, active, onSelect, right, chil
         </nav>
         <div className="sticky top-0 z-10 w-full overflow-x-auto border-b border-line bg-white px-3 py-2 md:hidden">
           <div className="flex gap-1">{menu.map((m) => <button key={m.id} onClick={() => onSelect(m.id)} className={`shrink-0 rounded-full px-3 py-1 text-sm ${active === m.id ? 'bg-primary text-white' : 'bg-fill'}`}>{m.label}</button>)}</div>
-        </div>
+        </div></> : null}
         <main key={active} className="min-w-0 flex-1 animate-view-in px-4 py-6 md:px-6 md:py-7 lg:px-10">{children}</main>
       </div>
     </div>

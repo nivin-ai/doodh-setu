@@ -9,22 +9,27 @@ import { DEMO_DATES, type DemoDateKey } from '@/lib/demo';
 const APPS = [
   { href: '/farmer', title: 'Farmer app', who: 'Savitaben, member of Anand Milk Society', desc: 'Voice-first app in Gujarati, Hindi and English: milk, earnings, signals, DairyFin finance, ask by voice.' },
   { href: '/society', title: 'Society dashboard', who: 'Rameshbhai, society secretary', desc: 'Receive approved targets, publish messages in three languages, track members and answer queries.' },
-  { href: '/planner', title: 'Planner console', who: 'Priya (planner) and Mr Shah (approver), district union', desc: 'Data health, demand forecasts, product mix, milk gap, incentive design with fairness and cap checks, approvals.' },
+  { href: '/planner', title: 'Planner console', who: 'Priya (planner), Mr Shah (approver) and Neha (marketing)', desc: 'One screen: demand forecast, product mix, milk gap and incentive with approval, supply-checked marketing, and results.' },
   { href: '/lender', title: 'Lender desk (DairyFin)', who: 'Anita, case officer at a demo partner bank', desc: 'Review consented income evidence, request documents and update application status.' },
 ];
 
 const STEPS: { d: DemoDateKey; app: string; text: string }[] = [
-  { d: 'mar', app: 'Planner', text: 'Data health: see each channel on volume vs quality.' },
-  { d: 'mar', app: 'Planner', text: 'Demand: forecast heatwave in April lifts curd, lassi and ice cream.' },
-  { d: 'mar', app: 'Planner', text: 'Product mix: move milk from powder to paneer and curd; value per litre rises.' },
-  { d: 'mar', app: 'Planner', text: 'Milk gap: buffalo milk short in April to June. Design a premium; fix the fairness warning; submit.' },
-  { d: 'mar', app: 'Planner', text: 'Switch user to the approver and approve (maker-checker).' },
+  { d: 'mar', app: 'Planner', text: 'Overview: headline numbers and data health at the top of the one-screen console.' },
+  { d: 'mar', app: 'Planner', text: 'Section 1, Demand: forecast heatwave in April lifts curd, lassi and ice cream.' },
+  { d: 'mar', app: 'Planner', text: 'Section 2, Product mix: move milk from powder to paneer and curd; value per litre rises. Accept the plan.' },
+  { d: 'mar', app: 'Planner', text: 'Section 3: buffalo milk short in April to June. Set the premium; fix the fairness warning; submit.' },
+  { d: 'mar', app: 'Planner', text: 'Switch user to the approver and approve in section 3 (maker-checker).' },
   { d: 'mar', app: 'Society', text: 'Preview the message in three languages, add a local note, publish.' },
   { d: 'mar', app: 'Farmer', text: 'Hear the signal in Gujarati, see what it is worth, tap "I\'m interested". Ask a question by voice.' },
   { d: 'mar', app: 'Farmer', text: 'Finance: check affordability, compare demo offers, consent and apply.' },
   { d: 'mar', app: 'Lender', text: 'Review the case and request a document; the farmer uploads it; mark approved.' },
+  { d: 'mar', app: 'Planner', text: 'Section 4, Marketing: switch user to Neha. Approve the heatwave lassi campaign (supply go); accept the hold on paneer and curd.' },
+  { d: 'mar', app: 'Planner', text: 'Section 4: send the milk story to societies.' },
+  { d: 'mar', app: 'Society', text: 'Milk story: listen in three languages and publish.' },
+  { d: 'mar', app: 'Farmer', text: 'Home: open "Where your milk goes this summer" and listen.' },
   { d: 'apr', app: 'Farmer', text: 'Switch demo date to 30 Apr: earnings show the premium and why the price changed.' },
-  { d: 'apr', app: 'Planner', text: 'Monitor: response and the share of value passed to farmers.' },
+  { d: 'apr', app: 'Planner', text: 'Section 5, Results: response and the share of value passed to farmers.' },
+  { d: 'apr', app: 'Planner', text: 'Section 5: campaign lift against control areas and return per rupee.' },
 ];
 
 // The loop the platform closes: city demand reaches the union, the union signals the society,
@@ -67,6 +72,8 @@ function Home() {
     { k: 'Farmer interested', v: s.farmer.interested ? 'yes' : 'no' },
     { k: 'Application', v: s.application ? s.application.status : 'none' },
     { k: 'Open queries', v: String(openQ) },
+    { k: 'Campaigns approved', v: String(Object.values(s.marketing.campaigns).filter((x) => x === 'approved' || x === 'override').length) },
+    { k: 'Milk story', v: s.marketing.story },
   ];
   return (
     <div className="min-h-screen bg-milk">
@@ -74,7 +81,7 @@ function Home() {
         <div className="mx-auto grid max-w-6xl items-center gap-8 px-5 pb-10 pt-9 lg:grid-cols-[1fr_520px]">
           <div>
             <div className="flex flex-wrap items-center gap-2">
-              <Chip tone="marigold">Prototype v0.1</Chip>
+              <Chip tone="marigold">Prototype v0.2</Chip>
               <VoiceBadge />
             </div>
             <h1 className="mt-4 font-display text-[52px] font-extrabold leading-[0.95] tracking-tight sm:text-[64px]">Doodh Setu</h1>
