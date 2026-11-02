@@ -6,5 +6,6 @@ export function GET() {
   return NextResponse.json({
     gnani: Boolean(process.env.GNANI_API_KEY),
     ai: process.env.GEMINI_API_KEY ? 'gemini' : process.env.ANTHROPIC_API_KEY ? 'claude' : null,
+    db: process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY ? 'supabase' : null,
   });
 }

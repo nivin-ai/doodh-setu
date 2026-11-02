@@ -39,6 +39,17 @@ If no key is set, or the AI call fails, the app falls back to the fixed rule-bas
 
 The demand map uses CARTO basemap tiles, which need a free key. Set `CART_KEY` in `.env.local` and in Vercel (Project, Settings, Environment Variables), then redeploy. The key is built into the page at build time, so a redeploy is required after adding it. Without a key, the map falls back to plain OpenStreetMap tiles.
 
+## Database (DairyFin consent and loan records)
+
+The finance journey records DPDP consents, loan applications and data-sharing events. Without a database they stay in the browser. To store them in Supabase:
+
+1. Create a free project at https://supabase.com.
+2. In the project, open SQL Editor, paste `supabase/schema.sql` and run it. It creates the tables from the Farmers Database Structure (farmers, farmer_kyc, farmer_properties, credit_profiles, loan_applications, consent_records, data_sharing_logs, insurance tables and more) with demo data, and turns on row level security.
+3. From Project Settings, API, copy the Project URL and the service role key into `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` in `.env.local` and in Vercel. Redeploy.
+4. Open `/api/health`: it should show `"db":"supabase"`. New consents and applications then appear in the Table Editor.
+
+KYC is stored as masked values and provider tokens only; raw Aadhaar or PAN numbers are never stored.
+
 ## Deploy to Vercel (no Git needed)
 
 1. Install Node.js 20 or later from https://nodejs.org (one-time).

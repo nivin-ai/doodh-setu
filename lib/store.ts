@@ -6,17 +6,28 @@ import type { Lang } from './i18n';
 import { SUGGESTED_IDS } from './union';
 import { PREMIUM_PERIOD } from './demo';
 import type { Premium } from './farmer';
+import { syncFinance } from './finance';
+
+const uuid = () => (typeof crypto !== 'undefined' && 'randomUUID' in crypto ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(16).slice(2)}`);
 
 export type IncentiveStatus = 'none' | 'submitted' | 'approved' | 'rejected' | 'concern' | 'published';
 export type AppStatus = 'submitted' | 'in_review' | 'more_info' | 'approved' | 'declined' | 'withdrawn';
 
-export interface Consent { id: string; recipient: string; purpose: string; scope: string; period: string; grantedAt: string; status: 'active' | 'withdrawn'; withdrawnAt?: string }
+export interface Consent {
+  id: string; uuid?: string; recipient: string; purpose: string; scope: string; period: string; grantedAt: string; status: 'active' | 'withdrawn'; withdrawnAt?: string;
+  // DPDP loan consent (consent_records): notice version, data categories, method and notice language
+  noticeVersion?: string; categories?: string[]; method?: 'digital' | 'assisted'; language?: Lang; statements?: number;
+}
+// data_sharing_logs: actual sharing events, kept separate from consent
+export interface SharingLog { id: string; uuid?: string; consentId: string; recipient: string; categories: string[]; purpose: string; status: 'initiated' | 'completed' | 'failed'; at: string }
 export interface Query { id: string; text: string; lang: Lang; at: string; reply?: string; status: 'open' | 'resolved' }
 export interface Application {
-  ref: string; product: string; lender: string; amount: number; tenure: number; rate: number; status: AppStatus;
+  ref: string; uuid?: string; product: string; lender: string; amount: number; tenure: number; rate: number; status: AppStatus;
   history: { status: AppStatus; at: string; note: string }[];
-  docs: { id: 'id' | 'bank' | 'quote'; status: 'received' | 'requested' | 'missing' }[];
+  docs: { id: 'id' | 'bank' | 'quote' | 'kyc' | 'land' | 'credit'; status: 'received' | 'requested' | 'missing' }[];
   consentId: string;
+  loanConsentId?: string;
+  sharing?: SharingLog[];
 }
 export type CampaignStatus = 'draft' | 'approved' | 'held' | 'override';
 export interface Marketing { campaigns: Record<string, CampaignStatus>; overrides: Record<string, string>; story: 'none' | 'sent' | 'published'; storyHeard: boolean }
@@ -44,7 +55,7 @@ interface State {
   replyQuery: (id: string, reply: string) => void;
   grantConsent: (c: Omit<Consent, 'id' | 'grantedAt' | 'status'>) => string;
   withdrawConsent: (id: string) => void;
-  submitApplication: (a: Omit<Application, 'ref' | 'status' | 'history' | 'docs'>) => void;
+  submitApplication: (a: Omit<Application, 'ref' | 'status' | 'history' | 'docs' | 'sharing'>) => void;
   setAppStatus: (s: AppStatus, note: string) => void;
   requestDoc: () => void;
   uploadDoc: () => void;
@@ -83,22 +94,36 @@ export const useStore = create<State>()(
       replyQuery: (id, reply) => set({ queries: get().queries.map((q) => (q.id === id ? { ...q, reply, status: 'resolved' } : q)) }),
       grantConsent: (c) => {
         const id = 'C' + (get().consents.length + 1).toString().padStart(3, '0');
-        set({ consents: [{ ...c, id, grantedAt: now(), status: 'active' }, ...get().consents] });
-        get().log('Savitaben (farmer)', `Granted consent ${id} to ${c.recipient} for "${c.purpose}"`);
+        const rec: Consent = { ...c, id, uuid: uuid(), grantedAt: now(), status: 'active' };
+        set({ consents: [rec, ...get().consents] });
+        get().log('Savitaben (farmer)', `Granted consent ${id} to ${c.recipient} for "${c.purpose}"${c.noticeVersion ? ` (notice ${c.noticeVersion})` : ''}`);
+        syncFinance({ type: 'consent', consent: rec });
         return id;
       },
       withdrawConsent: (id) => {
-        set({ consents: get().consents.map((c) => (c.id === id ? { ...c, status: 'withdrawn', withdrawnAt: now() } : c)) });
+        const at = now();
+        set({ consents: get().consents.map((c) => (c.id === id ? { ...c, status: 'withdrawn', withdrawnAt: at } : c)) });
         get().log('Savitaben (farmer)', `Withdrew consent ${id}`);
+        const c = get().consents.find((x) => x.id === id);
+        if (c?.uuid) syncFinance({ type: 'withdraw', consentUuid: c.uuid, at });
       },
       submitApplication: (a) => {
-        const app: Application = { ...a, ref: 'DF-10024', status: 'submitted', history: [{ status: 'submitted', at: now(), note: 'Application received by the bank' }], docs: [{ id: 'id', status: 'received' }, { id: 'bank', status: 'received' }, { id: 'quote', status: 'missing' }] };
+        const lc = a.loanConsentId ? get().consents.find((c) => c.id === a.loanConsentId && c.status === 'active') : undefined;
+        const sharing: SharingLog[] = lc ? [{ id: 'S' + Date.now().toString(36).toUpperCase(), uuid: uuid(), consentId: lc.id, recipient: a.lender, categories: lc.categories ?? [], purpose: 'Loan assessment and processing', status: 'completed', at: now() }] : [];
+        const app: Application = {
+          ...a, ref: 'DF-10024', uuid: uuid(), status: 'submitted', sharing,
+          history: [{ status: 'submitted', at: now(), note: 'Application received by the bank' }],
+          docs: [{ id: 'kyc', status: lc ? 'received' : 'missing' }, { id: 'land', status: lc ? 'received' : 'missing' }, { id: 'credit', status: lc ? 'received' : 'missing' }, { id: 'id', status: 'received' }, { id: 'bank', status: 'received' }, { id: 'quote', status: 'missing' }],
+        };
         set({ application: app });
         get().log('Savitaben (farmer)', `Submitted application ${app.ref} to ${a.lender}`);
+        syncFinance({ type: 'application', application: app, loanConsentUuid: lc?.uuid ?? null });
+        if (sharing.length) get().log('DairyFin', `Shared ${sharing[0].categories.join(', ')} with ${a.lender} under consent ${sharing[0].consentId} (${sharing[0].id})`);
       },
       setAppStatus: (s, note) => {
         const a = get().application; if (!a) return;
         set({ application: { ...a, status: s, history: [...a.history, { status: s, at: now(), note }] } });
+        if (a.uuid) syncFinance({ type: 'status', applicationUuid: a.uuid, status: s, at: now() });
         get().log('Anita (lender)', `Set ${a.ref} to ${s}${note ? ': ' + note : ''}`);
       },
       requestDoc: () => {

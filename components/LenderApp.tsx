@@ -7,6 +7,7 @@ import { monthKeysUpTo, monthSummary } from '@/lib/farmer';
 import { fmtMonth, inr, MONTHS } from '@/lib/util';
 import { CHART, Chip, ConsoleShell, Note, PageTitle, Stat } from './ui';
 import { IconBack, IconCheck, IconChevron } from './icons';
+import { CREDIT, KYC, PROPERTY } from '@/lib/finance';
 
 const LENDER = 'Gramin Partner Bank (demo)';
 const SEEDED = [
@@ -74,7 +75,9 @@ function CaseDetail({ refId, back }: { refId: string; back: () => void }) {
   const avg = Math.round(months.slice(-6).reduce((x, m) => x + m.total, 0) / 6);
   const lowest = months.reduce((x, m) => (m.total < x.total ? m : x), months[0]);
   const data = months.map((m) => ({ m: MONTHS[Number(m.key.slice(5)) - 1], v: m.total, low: m.key === lowest.key }));
-  const docName = { id: 'Identity proof', bank: 'Bank account details', quote: 'Cattle purchase quote' };
+  const docName = { id: 'Identity proof', bank: 'Bank account details', quote: 'Cattle purchase quote', kyc: 'KYC verification result (Aadhaar, PAN)', land: 'Land record (7/12 extract)', credit: 'Credit bureau report' };
+  const loanConsent = a.loanConsentId ? s.consents.find((c) => c.id === a.loanConsentId) : undefined;
+  const shareOk = loanConsent?.status === 'active';
   return (
     <div>
       <button className="mb-3 flex items-center gap-1 text-sm font-semibold text-primary hover:underline" onClick={back}><IconBack size={16} />All cases</button>
@@ -93,6 +96,19 @@ function CaseDetail({ refId, back }: { refId: string; back: () => void }) {
               <Bar dataKey="v" radius={[4, 4, 0, 0]}>{data.map((d, i) => <Cell key={i} fill={d.low ? CHART.marigold : CHART.indigo} />)}</Bar></BarChart></ResponsiveContainer></div>
           </>) : <p className="mt-2 text-sm text-bad">Consent withdrawn. Evidence is hidden.</p>}
         </div>
+      </div>
+      <div className="card mt-4 p-4">
+        <div className="flex flex-wrap items-center justify-between gap-2"><span className="label">Identity, land and credit (shared with consent)</span>
+          {loanConsent ? <Chip tone={shareOk ? 'good' : 'bad'}>{shareOk ? `Consent ${loanConsent.id} active, notice ${loanConsent.noticeVersion}` : `Consent ${loanConsent.id} withdrawn`}</Chip> : <Chip tone="bad">No DPDP loan consent</Chip>}</div>
+        {shareOk ? (
+          <div className="mt-3 grid gap-4 text-sm md:grid-cols-3">
+            <div><div className="font-semibold">Identity and KYC</div>{KYC.map((k) => <div key={k.type}>{k.type} {k.masked} <Chip tone="good">{k.status}</Chip><div className="text-xs text-muted">{k.provider}</div></div>)}</div>
+            <div><div className="font-semibold">Land and property</div><div>{PROPERTY.ownership}, survey {PROPERTY.survey}</div><div>{PROPERTY.village}, {PROPERTY.district}, {PROPERTY.state}</div><div>{PROPERTY.area} {PROPERTY.unit}, {PROPERTY.use}</div><div className="text-xs text-muted">{PROPERTY.record}, {PROPERTY.status}</div></div>
+            <div><div className="font-semibold">Credit history</div><div>{CREDIT.bureau} score <b>{CREDIT.score}</b></div><div>{CREDIT.loans} existing loan, {inr(CREDIT.outstanding)} outstanding</div><div className="text-xs text-muted">{CREDIT.retrieved}</div></div>
+          </div>
+        ) : <p className="mt-2 text-sm text-bad">{loanConsent ? 'The farmer withdrew consent. Identity, land and credit data are hidden and no further sharing takes place.' : 'Not shared: the farmer has not given DPDP consent for this application.'}</p>}
+        <div className="mt-3 text-xs text-muted">Masked values only; full Aadhaar and PAN numbers stay with the verification provider. Simulated data.</div>
+        {a.sharing?.length ? <ul className="mt-2 border-t border-line pt-2 text-xs">{a.sharing.map((x) => <li key={x.id}>Sharing log {x.id}: {x.categories.join(', ')} to {x.recipient}, {x.status}, {new Date(x.at).toLocaleString('en-IN')} (consent {x.consentId})</li>)}</ul> : null}
       </div>
       <div className="card mt-4 p-4">
         <div className="label">Documents</div>
