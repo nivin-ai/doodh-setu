@@ -3,16 +3,19 @@ import { createContext, useContext, useEffect, useMemo, useRef, useState } from 
 import { Bar, BarChart, Cell, ResponsiveContainer, XAxis, YAxis, Tooltip, LabelList } from 'recharts';
 import { useStore, activePremium, type AppStatus } from '@/lib/store';
 import { DEMO_DATES, FARMER } from '@/lib/demo';
-import { LANGS, SIGNAL_NEED, SIGNAL_TITLE, signalMessage, t, type Lang } from '@/lib/i18n';
+import { LANGS, SIGNAL_NEED, SIGNAL_TITLE, STORY, STORY_PRODUCT, signalMessage, storyMessage, t, type Lang } from '@/lib/i18n';
+import { milkStory } from '@/lib/marketing';
+import { PRODUCT_COLOR } from './MarketingView';
 import { dayTotals, explainChange, monthKeysUpTo, monthSummary, worthToFarmer, type MonthSummary } from '@/lib/farmer';
 import { answer } from '@/lib/ask';
-import { browserRecognition, recordWav, speak, transcribe, voiceHealth, type Recorder } from '@/lib/voice';
+import { browserRecognition, recordWav, speak, stopSpeaking, transcribe, voiceHealth, type Recorder } from '@/lib/voice';
+import { buildContext } from '@/lib/askContext';
 import { fmtMonth, inr, MONTHS } from '@/lib/util';
 import { Chip, Count, PlayButton, Segmented, Waveform, CHART } from './ui';
 import { IconBack, IconBank, IconCheck, IconChevron, IconHome, IconMic, IconNotice, IconPhone, IconRupee, IconSend, IconUser } from './icons';
 
 type Tab = 'home' | 'earnings' | 'signals' | 'finance' | 'ask';
-type Sub = null | 'signal' | 'why' | 'income' | 'afford' | 'products' | 'consent' | 'apply' | 'tracker' | 'profile';
+type Sub = null | 'story' | 'signal' | 'why' | 'income' | 'afford' | 'products' | 'consent' | 'apply' | 'tracker' | 'profile';
 
 const PRODUCTS_DEMO = [
   { id: 'gpb', lender: 'Gramin Partner Bank (demo)', name: 'Cattle loan', purpose: 'cattle', min: 25000, max: 200000, rate: 10.5, maxTenure: 36, feePct: 1, elig: 'Society member for 12+ months with regular milk supply' },
@@ -84,7 +87,7 @@ export default function FarmerApp() {
 
       <div key={viewKey} className={`indic px-4 pb-32 pt-4 text-[17px] ${sub ? 'animate-slide-in' : 'animate-view-in'}`}>
         {sub === 'profile' ? <Profile /> :
-          tab === 'home' ? <Home /> :
+          tab === 'home' ? (sub === 'story' ? <Story /> : <Home />) :
           tab === 'earnings' ? (sub === 'why' ? <Why /> : <Earnings />) :
           tab === 'signals' ? (sub === 'signal' ? <SignalDetail /> : <Signals />) :
           tab === 'finance' ? <Finance /> :
@@ -172,7 +175,54 @@ function Home() {
       {published ? <SignalNotice onOpen={() => go('signals', 'signal')} /> : (
         <div className="rounded-sheet border border-dashed border-line px-4 py-5 text-center text-[15px] text-muted">{T('noSignals')}</div>
       )}
+      {s.marketing.story === 'published' ? <StoryCard /> : null}
       <div className="px-1 text-[14px] text-muted">{T('alertsNone')}</div>
+    </div>
+  );
+}
+
+// Monthly milk story card (FRD FW12, screen F-04 entry to F-21)
+function StoryCard() {
+  const { s, lang, setSub } = useF();
+  const shares = milkStory();
+  const S = STORY[lang];
+  const top = [...shares].sort((a, b) => b.share - a.share).filter((x) => x.id !== 'milk' && x.id !== 'sink').slice(0, 3);
+  return (
+    <div role="button" tabIndex={0} onClick={() => setSub('story')} onKeyDown={(e) => { if (e.key === 'Enter') setSub('story'); }}
+      className="block w-full cursor-pointer rounded-sheet border border-line bg-white px-4 py-4 text-left transition hover:border-primary/40 active:scale-[0.99]">
+      <div className="flex items-center justify-between gap-2">
+        <span className="flex items-center gap-2"><span className="label">{S.label}: {FARMER.society}</span>{!s.marketing.storyHeard ? <Chip tone="marigold">{S.new}</Chip> : null}</span>
+        <PlayButton text={storyMessage(lang, FARMER.society, shares)} lang={lang} />
+      </div>
+      <div className="mt-1 font-display text-[20px] font-bold leading-tight">{S.title}</div>
+      <div className="mt-2.5 flex h-3 overflow-hidden rounded-full">{shares.map((x) => <div key={x.id} style={{ width: `${x.share}%`, background: PRODUCT_COLOR[x.id] }} />)}</div>
+      <div className="mt-1.5 flex flex-wrap gap-x-3 text-[13px] text-muted">{top.map((x) => <span key={x.id}>{STORY_PRODUCT[lang][x.id]} {x.share}</span>)}</div>
+      <div className="mt-2 flex items-center gap-0.5 text-[14px] font-semibold text-primary">{S.open}<IconChevron size={16} /></div>
+    </div>
+  );
+}
+
+function Story() {
+  const { s, lang, T, go } = useF();
+  const shares = [...milkStory()].sort((a, b) => b.share - a.share);
+  const S = STORY[lang];
+  const msg = storyMessage(lang, FARMER.society, shares);
+  useEffect(() => { if (!s.marketing.storyHeard) { s.setMarketing({ storyHeard: true }); s.log('Savitaben (farmer)', 'Opened the April milk story'); } }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  return (
+    <div className="space-y-3.5">
+      <div className="flex items-center justify-between"><span className="text-[13px] font-semibold text-muted">{T('fromSociety')}: {FARMER.society}</span><PlayButton text={msg} lang={lang} /></div>
+      <h2 className="font-display text-[24px] font-bold leading-tight">{S.title}</h2>
+      <section className="rounded-sheet border border-line bg-white px-4 py-4">
+        <div className="label">{S.per100}</div>
+        <div className="mt-3 space-y-2.5">{shares.map((x) => (
+          <div key={x.id} className="grid grid-cols-[1fr_auto] items-center gap-x-3 text-[15px]">
+            <span>{STORY_PRODUCT[lang][x.id]}</span><span className="num font-bold">{x.share} {S.litres}</span>
+            <div className="col-span-2 h-2 rounded-full bg-fill"><div className="bar-anim h-2 rounded-full" style={{ width: `${x.share}%`, background: PRODUCT_COLOR[x.id] }} /></div>
+          </div>
+        ))}</div>
+      </section>
+      <section className="rounded-xl border border-primary bg-primary-light p-4 text-[15px]">{S.why}</section>
+      <button className="btn-primary w-full" onClick={() => go('earnings')}>{T('whyChanged')}</button>
     </div>
   );
 }
@@ -503,67 +553,106 @@ function Tracker() {
 }
 
 // ---------------- Ask ----------------
+type Answer = { text: string; bullets?: string[]; ai: boolean; handoff?: boolean; why?: string };
+const VOICE_ERR: Record<string, Record<Lang, string>> = {
+  mic: { en: 'Microphone is blocked. Allow microphone access for this site, then try again.', hi: 'माइक्रोफ़ोन बंद है। इस साइट के लिए माइक्रोफ़ोन की अनुमति दें, फिर कोशिश करें।', gu: 'માઇક્રોફોન બંધ છે. આ સાઇટ માટે માઇક્રોફોનની મંજૂરી આપો, પછી ફરી પ્રયાસ કરો.' },
+  heard: { en: 'Could not hear clearly. Try again or type.', hi: 'साफ़ सुनाई नहीं दिया। फिर से बोलें या लिखें।', gu: 'સ્પષ્ટ સંભળાયું નહીં. ફરી બોલો અથવા લખો.' },
+  switched: { en: 'Gnani voice did not respond, switched to the browser voice. Tap and speak again.', hi: 'Gnani आवाज़ ने जवाब नहीं दिया, ब्राउज़र की आवाज़ पर बदला। फिर से दबाएँ और बोलें।', gu: 'Gnani અવાજે જવાબ ન આપ્યો, બ્રાઉઝર અવાજ પર ફેરવ્યું. ફરી દબાવો અને બોલો.' },
+  none: { en: 'Voice is not available in this browser. Please type, or open the app in Chrome.', hi: 'इस ब्राउज़र में आवाज़ उपलब्ध नहीं है। कृपया लिखें, या Chrome में खोलें।', gu: 'આ બ્રાઉઝરમાં અવાજ ઉપલબ્ધ નથી. કૃપા કરી લખો, અથવા Chrome માં ખોલો.' },
+};
+const AI_LABEL: Record<Lang, string> = { en: 'AI answer from your records', hi: 'आपके रिकॉर्ड से AI जवाब', gu: 'તમારા રેકોર્ડ પરથી AI જવાબ' };
+
 function Ask() {
-  const { s, lang, T, today, premium, months, worth, published, go, setSub, flash, loan, setLoan, whyMonth, setWhyMonth, monthKeys, complete } = useF();
+  const { s, lang, T, today, premium, flash } = useF();
   const [q, setQ] = useState('');
   const [said, setSaid] = useState<string | null>(null);
-  const [ans, setAns] = useState<ReturnType<typeof answer> | null>(null);
+  const [ans, setAns] = useState<Answer | null>(null);
   const [state, setState] = useState<'idle' | 'listening' | 'working' | 'error'>('idle');
+  const [err, setErr] = useState<string>('heard');
   const [mode, setMode] = useState<'gnani' | 'browser' | 'none'>('none');
   const [fb, setFb] = useState<string | null>(null);
   const rec = useRef<Recorder | null>(null);
+  const history = useRef<{ q: string; a: string }[]>([]);
   useEffect(() => { voiceHealth().then((h) => setMode(h.gnani ? 'gnani' : browserRecognition() ? 'browser' : 'none')); }, []);
-  const run = (text: string, voice: boolean) => {
-    setSaid(text); setFb(null);
-    const a = answer(text, lang, today, premium); setAns(a);
+  const fail = (k: string) => { setErr(k); setState('error'); };
+
+  const run = async (text: string, voice: boolean) => {
+    setSaid(text); setFb(null); setAns(null); setState('working');
+    let a: Answer | null = null, why = 'AI not reachable';
+    try {
+      const r = await fetch('/api/ask', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ question: text, lang, name: FARMER.first, history: history.current, context: buildContext(today, premium) }) });
+      const j = await r.json().catch(() => ({}));
+      if (r.ok) { a = { text: j.text, bullets: j.bullets?.length ? j.bullets : undefined, ai: true, handoff: j.handoff }; history.current = [...history.current, { q: text, a: [j.text, ...(j.bullets ?? [])].join(' ') }].slice(-3); }
+      else why = r.status === 501 ? 'AI key not set on the server (GEMINI_API_KEY)' : `AI error: ${String(j.error ?? r.status).slice(0, 120)}`;
+    } catch { /* fall back to rule-based answer */ }
+    if (!a) { const f = answer(text, lang, today, premium); a = { text: f.text, bullets: f.bullets, ai: false, handoff: f.intent === 'unknown', why }; }
+    setAns(a); setState('idle');
     if (voice) speak([a.text, ...(a.bullets ?? [])].join('. '), lang);
   };
+
+  const listenBrowser = () => {
+    const R = browserRecognition();
+    if (!R) { fail('none'); return; }
+    const r = new R(); r.lang = { gu: 'gu-IN', hi: 'hi-IN', en: 'en-IN' }[lang]; r.interimResults = false; r.maxAlternatives = 1;
+    let got = false;
+    r.onresult = (e) => { got = true; run(e.results[0][0].transcript, true); };
+    r.onerror = () => { if (!got) fail('heard'); };
+    r.onend = () => { if (!got) setState((x) => (x === 'listening' ? (setErr('heard'), 'error') : x)); };
+    rec.current = { stop: () => r.stop() }; r.start();
+  };
+
   const start = async () => {
     if (state === 'listening') { rec.current?.stop(); return; }
+    if (state === 'working') return;
+    stopSpeaking();
     setState('listening');
     try {
       if (mode === 'gnani') {
         rec.current = await recordWav(async (wav) => {
-          if (!wav) { setState('error'); return; }
+          if (!wav) { fail('heard'); return; }
           setState('working');
           const tx = await transcribe(wav, lang);
-          if (tx) { setState('idle'); run(tx, true); } else setState('error');
+          if (tx.text) { run(tx.text, true); return; }
+          if (tx.error !== 'empty' && browserRecognition()) { setMode('browser'); fail('switched'); return; }
+          fail('heard');
         });
-      } else if (mode === 'browser') {
-        const R = browserRecognition()!; const r = new R(); r.lang = { gu: 'gu-IN', hi: 'hi-IN', en: 'en-IN' }[lang]; r.interimResults = false; r.maxAlternatives = 1;
-        r.onresult = (e) => { setState('idle'); run(e.results[0][0].transcript, true); };
-        r.onerror = () => setState('error'); r.onend = () => setState((x) => (x === 'listening' ? 'idle' : x));
-        rec.current = { stop: () => r.stop() }; r.start();
-      } else setState('error');
-    } catch { setState('error'); }
+      } else if (mode === 'browser') listenBrowser();
+      else fail('none');
+    } catch (e) {
+      const name = (e as { name?: string })?.name;
+      fail(name === 'NotAllowedError' || name === 'SecurityError' || name === 'NotFoundError' ? 'mic' : 'heard');
+    }
   };
+
   const full = ans ? [ans.text, ...(ans.bullets ?? [])].join('. ') : '';
   return (
     <div className="space-y-3">
       {said ? (
         <div className="animate-view-in rounded-sheet border border-line bg-fill p-3.5"><div className="label">{T('youSaid')}</div><div className="italic">“{said}”</div>
-          <button className="mt-1 text-sm font-bold text-primary" onClick={() => { setSaid(null); setAns(null); }}>{T('tryAgain')}</button></div>
+          <button className="mt-1 text-sm font-bold text-primary" onClick={() => { setSaid(null); setAns(null); setState('idle'); }}>{T('tryAgain')}</button></div>
       ) : null}
+      {state === 'working' && said ? <div className="card rounded-sheet animate-view-in p-4 text-muted">{T('thinking')}</div> : null}
       {ans ? (
         <div className="card rounded-sheet animate-view-in p-4">
-          <div className="flex items-center justify-between"><Chip>{T('automated')}</Chip><PlayButton text={full} lang={lang} /></div>
+          <div className="flex items-center justify-between"><Chip tone={ans.ai ? 'primary' : undefined}>{ans.ai ? AI_LABEL[lang] : T('automated')}</Chip><PlayButton text={full} lang={lang} /></div>
           <div className="mt-2">{ans.text}</div>
+          {ans.why ? <div className="mt-1 text-[11px] text-muted">Scripted answer because: {ans.why}</div> : null}
           {ans.bullets ? <ul className="mt-1 list-disc pl-5 text-[15px]">{ans.bullets.map((b) => <li key={b}>{b}</li>)}</ul> : null}
           <div className="mt-2 flex items-center gap-3 text-sm text-muted">{T('helpful')} <button className="font-bold text-primary" onClick={() => setFb('y')}>{T('yes')}</button><button className="font-bold text-primary" onClick={() => setFb('n')}>{T('no')}</button>{fb ? <IconCheck size={16} className="text-good" /> : null}</div>
-          <button className="btn-secondary mt-3 w-full" onClick={() => { s.addQuery(said ?? '', lang); flash(T('sentToSociety')); }}>{T('talkPerson')}</button>
+          <button className={`${ans.handoff ? 'btn-primary' : 'btn-secondary'} mt-3 w-full`} onClick={() => { s.addQuery(said ?? '', lang); flash(T('sentToSociety')); }}>{T('talkPerson')}</button>
         </div>
       ) : null}
       <div className="label pt-1 text-center">{T('suggested')}</div>
       <div className="flex flex-col items-center gap-2">
-        {['sq1', 'sq2', 'sq3', 'sq4'].map((k) => <button key={k} onClick={() => run(T(k), false)} className="w-full max-w-[340px] rounded-full border border-line bg-white px-4 py-2 text-[15px] transition hover:border-primary/40 hover:bg-primary-light active:scale-[0.99]">{T(k)}</button>)}
+        {['sq1', 'sq2', 'sq3', 'sq4'].map((k) => <button key={k} disabled={state === 'working'} onClick={() => run(T(k), false)} className="w-full max-w-[340px] rounded-full border border-line bg-white px-4 py-2 text-[15px] transition hover:border-primary/40 hover:bg-primary-light active:scale-[0.99]">{T(k)}</button>)}
       </div>
-      <form className="flex gap-2 pt-2" onSubmit={(e) => { e.preventDefault(); if (q.trim()) { run(q.trim(), false); setQ(''); } }}>
+      <form className="flex gap-2 pt-2" onSubmit={(e) => { e.preventDefault(); if (q.trim() && state !== 'working') { run(q.trim(), false); setQ(''); } }}>
         <input className="input" placeholder={T('typeInstead')} value={q} onChange={(e) => setQ(e.target.value)} />
         <button className="btn-quiet" type="submit" aria-label="Ask"><IconSend /></button>
       </form>
       <div className="flex flex-col items-center pt-4">
         <button aria-label={T('tapSpeak')} onClick={start} className={`flex h-[84px] w-[84px] items-center justify-center rounded-full transition ${state === 'listening' ? 'listening bg-primary text-white' : 'bg-marigold text-ink shadow-[0_10px_24px_-10px_rgba(201,138,0,.8)] active:scale-95'}`}>{state === 'listening' ? <Waveform bars={5} className="!h-7 [&>span]:!w-1" color="#fff" /> : <IconMic size={34} />}</button>
-        <div className="mt-2 text-sm text-muted">{state === 'listening' ? T('listening') : state === 'working' ? T('thinking') : state === 'error' ? 'Could not hear clearly. Try again or type.' : T('tapSpeak')}</div>
+        <div className="mt-2 max-w-[340px] text-center text-sm text-muted">{state === 'listening' ? T('listening') : state === 'working' ? T('thinking') : state === 'error' ? VOICE_ERR[err]?.[lang] ?? VOICE_ERR.heard[lang] : T('tapSpeak')}</div>
         <div className="mt-1 text-[11px] text-muted">{T('voiceSource')}: {mode === 'gnani' ? 'Gnani.ai' : mode === 'browser' ? 'browser' : 'not available, please type'}</div>
       </div>
     </div>

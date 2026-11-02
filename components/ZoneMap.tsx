@@ -6,6 +6,9 @@ import { Circle, MapContainer, TileLayer, Tooltip, useMap } from 'react-leaflet'
 import type { City } from '@/lib/demand';
 import { CITY_VIEW, type Zone } from '@/lib/geo';
 
+// CARTO basemaps need a free key (https://carto.com/basemaps/apikey/). Without it, plain OpenStreetMap tiles are used.
+const CARTO_KEY = process.env.MAP_TILE_KEY;
+
 export interface Cell { zone: Zone; color: string; radius: number; label: string }
 
 function FlyTo({ city }: { city: City }) {
@@ -22,11 +25,14 @@ export default function ZoneMap({ city, cells, selected, onSelect }: { city: Cit
   const v = CITY_VIEW[city];
   return (
     <MapContainer center={v.center} zoom={v.zoom} minZoom={10} maxZoom={14} scrollWheelZoom={false} className="zone-map h-full w-full" attributionControl>
-      <TileLayer
-        url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
-        attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
-        subdomains="abcd"
-      />
+      {CARTO_KEY ? (
+        <TileLayer
+          url={`https://basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png?key=${CARTO_KEY}`}
+          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
+        />
+      ) : (
+        <TileLayer url="https://tile.openstreetmap.org/{z}/{x}/{y}.png" attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors' />
+      )}
       <FlyTo city={city} />
       {cells.map((c) => {
         const on = selected === c.zone.id;

@@ -1,4 +1,4 @@
-# Doodh Setu prototype (v0.1)
+# Doodh Setu prototype (v0.2)
 
 A working prototype of Doodh Setu, a demand-to-farmer intelligence platform for a dairy cooperative, built for the SPJIMR BDA assignment on the Amul case. All data is synthetic, calibrated to public Indian patterns. It is not real Amul data.
 
@@ -9,7 +9,7 @@ A working prototype of Doodh Setu, a demand-to-farmer intelligence platform for 
 | Demo home | `/` | Demo script, demo date switch, reset |
 | Farmer app | `/farmer` | Savitaben, a member farmer (Gujarati, Hindi, English, voice) |
 | Society dashboard | `/society` | Society secretary |
-| Planner console | `/planner` | Union planner and approver |
+| Planner console | `/planner` | Union planner, approver and marketing manager (Marketing menu) |
 | Lender desk (DairyFin) | `/lender` | Bank case officer |
 
 Open the apps in separate tabs of the same browser. Demo state is shared through the browser's local storage, so actions in one app show up in the others. "Reset demo" on the home page starts again.
@@ -25,17 +25,25 @@ If `GNANI_API_KEY` is not set, the app falls back to the browser's built-in voic
 
 Optional environment variables: `GNANI_VOICE_GU`, `GNANI_VOICE_HI`, `GNANI_VOICE_EN`, `GNANI_TTS_MODEL`, `GNANI_STT_MODEL`.
 
-## Deploy to Vercel through GitHub
+## AI answers (Ask tab)
 
-1. Create a new repository on GitHub and upload this folder's contents (not `node_modules`, `.next` or `.env.local`).
-2. At https://vercel.com/new, sign in with GitHub, import the repository, add the environment variable `GNANI_API_KEY`, and deploy.
-3. Every change pushed to the repository redeploys automatically.
+Questions in the Ask tab are answered by an AI model through `/api/ask`. It only uses the farmer's own records and the society's approved advice, which the app sends with each question (`lib/askContext.ts`). If it can't answer from those, it says so and points to "Talk to a person".
 
-## Deploy with the Vercel CLI (alternative)
+Set one key in Vercel (Project, Settings, Environment Variables), then redeploy:
+- `GEMINI_API_KEY` (free tier, get it at https://aistudio.google.com/apikey). Optional `GEMINI_MODEL`, default `gemini-flash-latest`.
+- or `ANTHROPIC_API_KEY`. Optional `ANTHROPIC_MODEL`, default `claude-haiku-5-5`.
+
+If no key is set, or the AI call fails, the app falls back to the fixed rule-based answers in `lib/ask.ts`. Open `/api/health` to see what is active: `{"gnani":true,"ai":"gemini"}`.
+
+## Map tiles (demand map)
+
+The demand map uses CARTO basemap tiles, which need a free key. Set `CART_KEY` in `.env.local` and in Vercel (Project, Settings, Environment Variables), then redeploy. The key is built into the page at build time, so a redeploy is required after adding it. Without a key, the map falls back to plain OpenStreetMap tiles.
+
+## Deploy to Vercel (no Git needed)
 
 1. Install Node.js 20 or later from https://nodejs.org (one-time).
 2. Open Terminal, go to this folder:
-   `cd ~/Desktop/"BDA Prototype"/doodh-setu-app`
+   `cd "~/Desktop/BDA Prototype/doodh-setu-app"`
 3. Run `npx vercel` and follow the prompts (log in, accept the defaults). This gives you a preview link.
 4. Add your Gnani key: `npx vercel env add GNANI_API_KEY` (choose Production and Preview), or add it in the Vercel dashboard under Project, Settings, Environment Variables.
 5. Run `npx vercel --prod` to publish the production link.
@@ -55,10 +63,17 @@ npm run dev                  # open http://localhost:3000
 - `lib/farmer.ts`: daily milk collection for one farmer (3 buffaloes, 1 cow), seasonal yields, fat and SNF, payment at ₹865 per kg fat plus SNF bonus, and an exact breakdown of why the monthly payment changed.
 - `lib/demand.ts`: two years of daily sales for 5 products in Mumbai and Ahmedabad across dealers, quick commerce and Amul Shop, driven by growth, temperature, festivals and weekends. The forecast uses last year's pattern adjusted for growth and temperature, with an 80% range and a 28-day accuracy check.
 - `lib/union.ts`: product-mix plan (highest value per litre first, within demand, capacity, buffalo milk and the liquid milk commitment), the buffalo milk gap, the incentive model (cost, value gained, cap check) and the fairness view by society size.
+- `lib/marketing.ts`: Module G. Demand opportunities by product and city from the forecast; a supply check that holds any campaign the product-mix plan cannot supply (for example paneer and curd while buffalo milk is short); campaign value counted as extra milk sold as that product instead of going to powder; results against control areas; farmer segments with a weekly message cap; and the monthly "where your milk goes" story.
 - `lib/ask.ts`: the farmer assistant answers only from approved content and the farmer's own records, in three languages.
 - `lib/i18n.ts`: farmer-facing text in Gujarati, Hindi and English. Starter translations: review with native speakers before field use.
 
-## Known limits of v0.1
+## What changed in v0.2
+
+- Planner console: new Marketing menu (opportunities, campaigns with supply check, results, farmer segments and milk story). New user: Neha (marketing).
+- Society dashboard: Milk story page to publish the union's monthly story.
+- Farmer app: "Where your milk goes this summer" card and story, read aloud.
+
+## Known limits
 
 - Demo state lives in one browser; there is no database or login.
 - Translation of free-text local notes is manual (Gnani.ai provides voice, not translation).

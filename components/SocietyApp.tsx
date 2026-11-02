@@ -3,7 +3,8 @@ import { useState } from 'react';
 import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { useStore } from '@/lib/store';
 import { DEMO_DATES, FARMER, PREMIUM_PERIOD } from '@/lib/demo';
-import { signalMessage, type Lang } from '@/lib/i18n';
+import { signalMessage, storyMessage, type Lang } from '@/lib/i18n';
+import { milkStory } from '@/lib/marketing';
 import { worthToFarmer } from '@/lib/farmer';
 import { gauss, inr, mulberry32, num } from '@/lib/util';
 import { CHART, Chip, ConsoleShell, Count, Note, PageTitle, PlayButton, Segmented, Stat } from './ui';
@@ -28,11 +29,11 @@ export default function SocietyApp() {
   const openQ = s.queries.filter((q) => q.status === 'open').length;
   const menu = [
     { id: 'overview', label: 'Overview' }, { id: 'targets', label: 'Targets', badge: pendingTarget },
-    { id: 'members', label: 'Members' }, { id: 'queries', label: 'Queries', badge: openQ }, { id: 'reports', label: 'Reports' },
+    { id: 'members', label: 'Members' }, { id: 'queries', label: 'Queries', badge: openQ }, { id: 'story', label: 'Milk story', badge: s.marketing.story === 'sent' ? 1 : 0 }, { id: 'reports', label: 'Reports' },
   ];
   return (
     <ConsoleShell title="Society dashboard" place={FARMER.society} menu={menu} active={view} onSelect={setView} right={<span className="rounded-full bg-white/10 px-3 py-1">Rameshbhai, secretary</span>}>
-      {view === 'overview' ? <Overview go={setView} /> : view === 'targets' ? <Targets /> : view === 'members' ? <Members /> : view === 'queries' ? <Queries /> : <Reports />}
+      {view === 'overview' ? <Overview go={setView} /> : view === 'targets' ? <Targets /> : view === 'members' ? <Members /> : view === 'queries' ? <Queries /> : view === 'story' ? <MilkStory /> : <Reports />}
     </ConsoleShell>
   );
 }
@@ -65,7 +66,8 @@ function Overview({ go }: { go: (v: string) => void }) {
         <ul className="mt-2 divide-y divide-line overflow-hidden rounded-xl border border-line bg-white">
           {s.incentive.status === 'approved' ? <li><button className="flex w-full items-center gap-3 px-4 py-3 text-left font-semibold text-primary transition-colors hover:bg-primary-light" onClick={() => go('targets')}><span className="h-2.5 w-2.5 rounded-full bg-marigold" />New approved target from the union: publish to members<IconChevron className="ml-auto" /></button></li> : null}
           {s.queries.filter((q) => q.status === 'open').length ? <li><button className="flex w-full items-center gap-3 px-4 py-3 text-left font-semibold text-primary transition-colors hover:bg-primary-light" onClick={() => go('queries')}><span className="h-2.5 w-2.5 rounded-full bg-marigold" />{s.queries.filter((q) => q.status === 'open').length} member {s.queries.filter((q) => q.status === 'open').length === 1 ? 'query' : 'queries'} waiting<IconChevron className="ml-auto" /></button></li> : null}
-          {s.incentive.status !== 'approved' && !s.queries.some((q) => q.status === 'open') ? <li className="px-4 py-3 text-muted">Nothing pending.</li> : null}
+          {s.marketing.story === 'sent' ? <li><button className="flex w-full items-center gap-3 px-4 py-3 text-left font-semibold text-primary transition-colors hover:bg-primary-light" onClick={() => go('story')}><span className="h-2.5 w-2.5 rounded-full bg-marigold" />Monthly milk story from the union: review and publish<IconChevron className="ml-auto" /></button></li> : null}
+          {s.incentive.status !== 'approved' && !s.queries.some((q) => q.status === 'open') && s.marketing.story !== 'sent' ? <li className="px-4 py-3 text-muted">Nothing pending.</li> : null}
         </ul>
       </div>
     </div>
@@ -240,6 +242,39 @@ function Delivery() {
       <div className="mt-3 flex gap-5 text-[13px] text-muted">
         <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full" style={{ background: CHART.indigo }} />App, {app}</span>
         <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full" style={{ background: CHART.marigold }} />Voice call, {total - app}</span>
+      </div>
+    </div>
+  );
+}
+
+// S-10: the union's monthly milk story, published in the society's name (FRD SW6)
+function MilkStory() {
+  const s = useStore();
+  const st = s.marketing.story;
+  const shares = milkStory();
+  if (st === 'none') return <div><PageTitle title="Milk story" /><div className="rounded-sheet border border-dashed border-line p-10 text-center text-muted">No story from the union yet. The planner sends one each month (Planner console, Marketing, Farmer members).</div></div>;
+  const langs: { id: Lang; name: string }[] = [{ id: 'gu', name: 'Gujarati' }, { id: 'hi', name: 'Hindi' }, { id: 'en', name: 'English' }];
+  return (
+    <div>
+      <PageTitle title="Milk story" chip={<Chip tone={st === 'published' ? 'good' : 'primary'}>{st === 'published' ? 'Published' : 'From the union'}</Chip>} sub="Where the society's milk goes this summer, from the union's product-mix plan. Members hear it in the society's name." />
+      <div className="grid gap-4 lg:grid-cols-3">
+        {langs.map((l) => {
+          const msg = storyMessage(l.id, FARMER.society, shares);
+          return (
+            <div key={l.id} className="card overflow-hidden"><div className="blockprint h-1.5" /><div className="p-4">
+              <div className="flex items-center justify-between"><span className="font-semibold">{l.name}</span><PlayButton text={msg} lang={l.id} /></div>
+              <p className="indic mt-2 text-sm">{msg}</p>
+              <div className="mt-2 flex items-center gap-1 text-[12px] font-semibold text-good"><IconCheck size={14} />Template reviewed</div>
+            </div></div>
+          );
+        })}
+      </div>
+      <div className="card mt-4 p-4 text-sm"><div className="font-bold">Audience</div>All members (412): 298 by app, 114 by voice call (IVR). Counts towards each member&apos;s limit of 2 messages a week; the premium signal is never held back for it.</div>
+      <div className="mt-5 flex justify-between">
+        {st === 'sent' ? <>
+          <button className="btn-secondary" onClick={() => { s.setMarketing({ story: 'none' }); s.log('Rameshbhai (society)', 'Raised a concern on the milk story; returned to the union'); }}>Raise concern</button>
+          <button className="btn-primary" onClick={() => { s.setMarketing({ story: 'published' }); s.log('Rameshbhai (society)', 'Published the April milk story to 412 members'); }}>Publish to members</button>
+        </> : <Note>Published to all members by app and IVR.</Note>}
       </div>
     </div>
   );

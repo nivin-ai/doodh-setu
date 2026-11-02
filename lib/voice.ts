@@ -75,44 +75,56 @@ function downsample(data: Float32Array, from: number, to: number) {
 
 export interface Recorder { stop: () => void }
 
-// Records until stop() is called, 2 s of silence after speech, or 12 s.
+// Records until stop() is called, 1.8 s of silence after speech, or 15 s.
+// The AudioContext is created before any await so it starts inside the tap (Safari and iOS need this).
 export async function recordWav(onDone: (wav: Blob | null) => void): Promise<Recorder> {
-  const stream = await navigator.mediaDevices.getUserMedia({ audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true } });
   const Ctx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
   const ctx = new Ctx();
+  let stream: MediaStream;
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({ audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true } });
+  } catch (e) { ctx.close(); throw e; }
+  if (ctx.state === 'suspended') await ctx.resume().catch(() => undefined);
   const src = ctx.createMediaStreamSource(stream);
   const proc = ctx.createScriptProcessor(4096, 1, 1);
+  const mute = ctx.createGain(); mute.gain.value = 0; // keeps the processor running without echoing the mic
   const chunks: Float32Array[] = [];
   let heard = false, silentSince = performance.now(), done = false;
-  const started = performance.now();
   const finish = () => {
     if (done) return; done = true;
-    proc.disconnect(); src.disconnect(); stream.getTracks().forEach((t) => t.stop());
+    clearTimeout(cap);
+    proc.onaudioprocess = null;
+    try { proc.disconnect(); src.disconnect(); mute.disconnect(); } catch { /* already disconnected */ }
+    stream.getTracks().forEach((t) => t.stop());
     const len = chunks.reduce((x, c) => x + c.length, 0);
     const all = new Float32Array(len); let o = 0; for (const c of chunks) { all.set(c, o); o += c.length; }
     const rate = ctx.sampleRate; ctx.close();
-    onDone(len > rate * 0.3 ? encodeWav(downsample(all, rate, 16000), 16000) : null);
+    onDone(len > rate * 0.4 ? encodeWav(downsample(all, rate, 16000), 16000) : null);
   };
+  const cap = setTimeout(finish, 15000); // hard stop even if audio processing never starts
   proc.onaudioprocess = (e) => {
     const d = e.inputBuffer.getChannelData(0);
     chunks.push(new Float32Array(d));
     let rms = 0; for (let i = 0; i < d.length; i++) rms += d[i] * d[i]; rms = Math.sqrt(rms / d.length);
     const t = performance.now();
-    if (rms > 0.02) { heard = true; silentSince = t; }
-    if ((heard && t - silentSince > 2000) || t - started > 12000) finish();
+    if (rms > 0.01) { heard = true; silentSince = t; }
+    if (heard && t - silentSince > 1800) finish();
   };
-  src.connect(proc); proc.connect(ctx.destination);
+  src.connect(proc); proc.connect(mute); mute.connect(ctx.destination);
   return { stop: finish };
 }
 
-export async function transcribe(wav: Blob, lang: Lang): Promise<string | null> {
+export async function transcribe(wav: Blob, lang: Lang): Promise<{ text: string | null; error?: string }> {
   const fd = new FormData();
   fd.append('audio_file', wav, 'question.wav');
   fd.append('language', lang);
-  const r = await fetch('/api/stt', { method: 'POST', body: fd });
-  if (!r.ok) return null;
-  const j = await r.json();
-  return (j.transcript as string) ?? null;
+  try {
+    const r = await fetch('/api/stt', { method: 'POST', body: fd });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) return { text: null, error: `Gnani STT ${j?.status ?? r.status}` };
+    const t = String(j.transcript ?? '').trim();
+    return t ? { text: t } : { text: null, error: 'empty' };
+  } catch { return { text: null, error: 'network' }; }
 }
 
 // ---------- Browser speech recognition fallback (Chrome, Edge) ----------

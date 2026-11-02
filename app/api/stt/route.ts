@@ -15,7 +15,7 @@ export async function POST(req: NextRequest) {
   if (!(audio instanceof Blob)) return NextResponse.json({ error: 'audio_file required' }, { status: 400 });
   const out = new FormData();
   out.append('audio_file', audio, 'question.wav');
-  out.append('language_code', CODES[lang] ?? 'gu-IN');
+  out.append('language_code', lang === 'en' ? 'en-IN' : `${CODES[lang] ?? 'gu-IN'},en-IN`);
   out.append('model', process.env.GNANI_STT_MODEL || 'prisma-v3.0');
   out.append('format', 'transcribe');
   const r = await fetch('https://api.vachana.ai/stt/v3', { method: 'POST', headers: { 'X-API-Key-ID': key }, body: out });
