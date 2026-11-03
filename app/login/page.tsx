@@ -3,6 +3,7 @@ import { Suspense, useState } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { resetSession } from '@/components/session';
+import CowLogo from '@/components/CowLogo';
 import { ROLE_LABEL, type Role } from '@/lib/roles';
 
 // Demo accounts, shown so presenters can sign in quickly. Checked on the server (lib/users.ts).
@@ -37,7 +38,7 @@ function Login() {
       <header className="border-b border-line bg-white">
         <div className="mx-auto flex max-w-5xl items-center gap-3 px-5 py-3.5">
           <Link href="/" className="flex items-center gap-3">
-            <span className="flex h-8 w-8 items-center justify-center rounded-md bg-primary text-[13px] font-bold tracking-wide text-white">DS</span>
+            <CowLogo size={36} />
             <span className="text-[17px] font-semibold tracking-tight">Doodh Setu</span>
           </Link>
           <Link href="/farmer" className="ml-auto text-[14px] font-semibold text-primary hover:underline">Farmer app</Link>

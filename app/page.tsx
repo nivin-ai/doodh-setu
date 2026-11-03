@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { ClientOnly } from '@/components/Providers';
 import { VoiceBadge } from '@/components/ui';
 import WalkingCow from '@/components/WalkingCow';
+import CowLogo from '@/components/CowLogo';
 import { signOut, useSession } from '@/components/session';
 import { HOME_FOR } from '@/lib/roles';
 import { IconBank, IconChevron, IconDrop, IconNotice } from '@/components/icons';
@@ -57,7 +58,7 @@ function Home() {
     <div className="min-h-screen bg-milk font-sans">
       <header className="border-b border-line bg-white">
         <div className="mx-auto flex max-w-6xl items-center gap-3 px-5 py-3.5">
-          <span className="flex h-8 w-8 items-center justify-center rounded-md bg-primary text-[13px] font-bold tracking-wide text-white">DS</span>
+          <CowLogo size={36} />
           <span className="text-[17px] font-semibold tracking-tight">Doodh Setu</span>
           <span className="ml-auto hidden text-[13px] text-muted md:inline">Prototype v0.2, synthetic data</span>
           <span className="hidden sm:inline"><VoiceBadge /></span>

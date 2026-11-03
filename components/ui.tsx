@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { speak, stopSpeaking, voiceHealth } from '@/lib/voice';
 import { ACCESS } from '@/lib/roles';
 import { signOut, useSession } from './session';
+import CowLogo from './CowLogo';
 import type { Lang } from '@/lib/i18n';
 import { useStore } from '@/lib/store';
 import { DEMO_DATES } from '@/lib/demo';
@@ -117,7 +118,7 @@ export function ConsoleShell({ title, place, menu, active, onSelect, right, chil
       <DemoBar />
       <header className="flex flex-wrap items-center gap-x-5 gap-y-2 bg-console px-4 py-3 text-white md:px-6">
         <Link href="/" className="flex items-center gap-2.5">
-          <span className="flex h-7 w-7 items-center justify-center rounded-md bg-white text-[12px] font-bold text-primary">DS</span>
+          <CowLogo size={32} className="border-white/30" />
           <span className="text-[17px] font-semibold tracking-tight">Doodh Setu</span>
         </Link>
         <span className="hidden text-[14px] text-white/75 sm:inline">{title}{place ? <span className="text-white/55">, {place}</span> : null}</span>
