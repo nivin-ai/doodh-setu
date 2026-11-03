@@ -6,7 +6,7 @@ import { resetSession } from '@/components/session';
 import CowLogo from '@/components/CowLogo';
 import { ROLE_LABEL, type Role } from '@/lib/roles';
 
-// Demo accounts, shown so presenters can sign in quickly. Checked on the server (lib/users.ts).
+// Demo accounts, shown so presenters can sign in quickly. Checked on the server against app_users (hashed passwords).
 const DEMO: { username: string; password: string; role: Role; opens: string }[] = [
   { username: 'planner', password: 'planner123', role: 'planner', opens: 'Planner console' },
   { username: 'approver', password: 'approver123', role: 'approver', opens: 'Planner console (approvals)' },

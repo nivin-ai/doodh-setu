@@ -1,9 +1,15 @@
-// Signed session cookie for the staff console (demo accounts). Works in middleware (edge) and route handlers.
+// Signed session cookies. Works in middleware (edge) and route handlers.
+//   ds_session: staff console user (app_users). Carries the user's scope ids for the database.
+//   ds_farmer:  the farmer app on a registered phone (prototype: the demo farmer's device).
 import type { Role } from './roles';
 export * from './roles';
-export interface Session { u: string; n: string; r: Role; exp: number }
+export interface Session {
+  u: string; n: string; r: Role | 'farmer'; exp: number;
+  c?: string | null; s?: string | null; l?: string | null; f?: string | null; // cooperative, society, lender, farmer ids
+}
 
 export const COOKIE = 'ds_session';
+export const FARMER_COOKIE = 'ds_farmer';
 export const MAX_AGE = 60 * 60 * 12; // 12 hours
 
 const enc = new TextEncoder();

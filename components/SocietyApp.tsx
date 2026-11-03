@@ -1,57 +1,71 @@
 'use client';
-import { useState } from 'react';
+import { createContext, useContext, useState } from 'react';
 import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
-import { useStore, threadOf } from '@/lib/store';
-import { DEMO_DATES, FARMER, PREMIUM_PERIOD } from '@/lib/demo';
+import { useStore } from '@/lib/store';
+import { DEMO_DATES } from '@/lib/demo';
 import { LANGS, signalMessage, type Lang } from '@/lib/i18n';
-import { worthToFarmer } from '@/lib/farmer';
-import { inr, num } from '@/lib/util';
-import { memberRows, TOTAL_MEMBERS, type MemberRow } from '@/lib/members';
+import { fmtDate, fmtMonth, inr, num } from '@/lib/util';
+import { postJson, useResource } from '@/lib/client/api';
+import type { MemberRow, SendSlot, SocietyData } from '@/lib/types/api';
+import { Empty, ErrorState, Loading } from './DataState';
 import { CHART, Chip, ConsoleShell, Count, Note, PageTitle, PlayButton, Segmented, Stat } from './ui';
 import { IconCheck, IconChevron } from './icons';
 
 
+// Society data comes from the database (/api/society), scoped to the signed-in secretary's society
+interface Ctx { d: SocietyData; asOf: string; act: (action: string, body?: Record<string, unknown>) => Promise<boolean>; busy: boolean; err: string }
+const SocietyCtx = createContext<Ctx | null>(null);
+const useSociety = () => useContext(SocietyCtx) as Ctx;
+
 export default function SocietyApp() {
   const s = useStore();
   const [view, setView] = useState('overview');
-  const inc = s.incentive;
-  const pendingTarget = inc.status === 'approved' ? 1 : 0;
-  const openQ = s.queries.filter((q) => q.status === 'open').length;
+  const asOf = DEMO_DATES[s.demoDate].date;
+  const r = useResource<SocietyData>(`/api/society?asOf=${asOf}`, { poll: 5000 });
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState('');
+  const act = async (action: string, body: Record<string, unknown> = {}) => {
+    setBusy(true); setErr('');
+    try { await postJson('/api/society', { ...body, action, asOf }); await r.refresh(); return true; }
+    catch (e) { setErr(e instanceof Error ? e.message : String(e)); return false; }
+    finally { setBusy(false); }
+  };
+  const d = r.data;
+  const pendingTarget = d?.program?.status === 'approved' ? 1 : 0;
+  const openQ = d ? d.queries.filter((q) => q.status === 'open').length : 0;
   const menu = [
     { id: 'overview', label: 'Overview' }, { id: 'targets', label: 'Targets', badge: pendingTarget },
     { id: 'members', label: 'Members' }, { id: 'queries', label: 'Queries', badge: openQ }, { id: 'reports', label: 'Reports' },
   ];
   return (
-    <ConsoleShell title="Society dashboard" place={FARMER.society} menu={menu} active={view} onSelect={setView}>
-      {view === 'overview' ? <Overview go={setView} /> : view === 'targets' ? <Targets /> : view === 'members' ? <Members /> : view === 'queries' ? <Queries /> : <Reports />}
+    <ConsoleShell title="Society dashboard" place={d?.society.name} menu={menu} active={view} onSelect={setView}>
+      {!d ? (r.error ? <ErrorState error={r.error} onRetry={r.refresh} /> : <Loading label="Loading society records..." />) : (
+        <SocietyCtx.Provider value={{ d, asOf, act, busy, err }}>
+          {view === 'overview' ? <Overview go={setView} /> : view === 'targets' ? <Targets /> : view === 'members' ? <Members /> : view === 'queries' ? <Queries /> : <Reports />}
+        </SocietyCtx.Provider>
+      )}
     </ConsoleShell>
   );
-}
-
-function reach(published: boolean, heardMe: boolean, intMe: boolean, apr: boolean) {
-  if (!published) return { heard: 0, interested: 0 };
-  const rows = memberRows({ published, apr, lang: 'gu', heard: heardMe, interested: intMe });
-  return { heard: rows.filter((m) => m.status !== 'Not heard').length, interested: rows.filter((m) => m.status === 'Interested').length };
 }
 
 const LANG_NAME: Record<string, string> = { gu: 'Gujarati', hi: 'Hindi', en: 'English', mr: 'Marathi', bn: 'Bengali', te: 'Telugu', ta: 'Tamil', kn: 'Kannada', ml: 'Malayalam', or: 'Odia' };
 
 // Interested members as an Excel file, so the secretary can call each one back.
-async function downloadInterested(rows: MemberRow[], o: { rate: number; demoDate: string }) {
+async function downloadInterested(rows: MemberRow[], o: { rate: number; demoDate: string; society: string; from: string; to: string }) {
   const { default: writeExcelFile } = await import('write-excel-file/browser');
   const list = rows.filter((r) => r.status === 'Interested');
   const H = (v: string) => ({ value: v, fontWeight: 'bold' as const, color: '#FFFFFF', backgroundColor: '#0B5CAD' });
   const header = ['Member ID', 'Name', 'Mobile number', 'Device', 'Reach by', 'Language', 'Village', 'Buffaloes', 'Cows', 'Avg milk (L/day)', 'Status', 'Called back', 'Notes'].map(H);
   const data = [header, ...list.map((m) => [
-    { value: m.id }, { value: m.name }, { value: m.mobile }, { value: m.device },
+    { value: m.code }, { value: m.name }, { value: m.mobile ?? '' }, { value: m.device },
     { value: m.device === 'Smartphone' ? 'App or call' : 'Voice call' }, { value: LANG_NAME[m.lang] ?? m.lang }, { value: m.village },
     { value: m.buffaloes, type: Number }, { value: m.cows, type: Number }, { value: Math.round(m.litres * 10) / 10, type: Number, format: '0.0' },
     { value: m.status }, { value: '' }, { value: '' },
   ])];
   const about = [
     [{ value: 'Interested members', fontWeight: 'bold' as const, fontSize: 14 }],
-    [{ value: 'Society' }, { value: FARMER.society }],
-    [{ value: 'Signal' }, { value: `Lean-season buffalo milk premium, Rs ${o.rate} per kg fat, ${PREMIUM_PERIOD.from} to ${PREMIUM_PERIOD.to}` }],
+    [{ value: 'Society' }, { value: o.society }],
+    [{ value: 'Signal' }, { value: `Lean-season buffalo milk premium, Rs ${o.rate} per kg fat, ${o.from} to ${o.to}` }],
     [{ value: 'Members interested' }, { value: list.length, type: Number }],
     [{ value: 'Data as of' }, { value: o.demoDate }],
     [{ value: 'How to use' }, { value: 'Call each member back, then fill in the Called back and Notes columns.' }],
@@ -60,44 +74,46 @@ async function downloadInterested(rows: MemberRow[], o: { rate: number; demoDate
   await writeExcelFile([
     { data, sheet: 'Interested members', columns: [9, 22, 18, 20, 13, 11, 12, 10, 7, 14, 11, 12, 30].map((width) => ({ width })), stickyRowsCount: 1 },
     { data: about, sheet: 'About', columns: [{ width: 20 }, { width: 90 }] },
-  ]).toFile(`Interested_members_${FARMER.society.replace(/\s+/g, '_')}_${o.demoDate}.xlsx`);
+  ]).toFile(`Interested_members_${o.society.replace(/\s+/g, '_')}_${o.demoDate}.xlsx`);
 }
 
 function Overview({ go }: { go: (v: string) => void }) {
-  const s = useStore();
-  const apr = s.demoDate === 'apr';
-  const published = s.incentive.status === 'published';
-  const r = reach(published, s.farmer.heard, s.farmer.interested, apr);
-  const buf = apr ? 2310 : 2560, cow = apr ? 1980 : 2120;
-  const target = apr && published ? Math.round(buf / 1.04 * 1.06) : null;
+  const { d, asOf } = useSociety();
+  const p = d.program;
+  const published = p?.status === 'published';
+  const r = d.reach;
+  const buf = d.collection?.buffalo ?? 0, cow = d.collection?.cow ?? 0;
+  const live = published && p && asOf >= p.from && asOf <= p.to;
+  const target = live ? Math.round(buf / 1.04 * 1.06) : null;
+  const queries = d.queries.filter((q) => q.status === 'open').length;
   return (
     <div>
-      <PageTitle title="Overview" sub={`Collection on ${DEMO_DATES[s.demoDate].label}`} />
+      <PageTitle title="Overview" sub={`Collection on ${fmtDate(asOf)}`} />
+      {!d.collection ? <div className="mb-3"><Empty>No collection recorded for this date.</Empty></div> : null}
       <div className="grid gap-4 md:grid-cols-4">
         <Stat label="Buffalo milk today" value={`${num(buf)} L`} sub={target ? `Target ${num(target)} L` : 'No active target'} tone={target ? (buf >= target ? 'good' : 'warn') : undefined} />
         <Stat label="Cow milk today" value={`${num(cow)} L`} sub="No active target" />
-        <Stat label="Members reached" value={published ? `${r.heard} / 412` : '-'} sub={published ? 'Heard the latest signal' : 'No active signal'} />
+        <Stat label="Members reached" value={published ? `${r.heard} / ${d.society.members}` : '-'} sub={published ? 'Heard the latest signal' : 'No active signal'} />
         <Stat label="Interested" value={published ? r.interested : '-'} sub={published ? 'Asked for follow-up' : ''} />
       </div>
       {published && r.interested ? (
         <div className="mt-3 flex flex-wrap items-center gap-3 text-sm">
-          <button className="btn-secondary !min-h-[38px] text-sm" onClick={() => downloadInterested(memberRows({ published, apr, lang: s.lang, heard: s.farmer.heard, interested: s.farmer.interested }), { rate: s.incentive.rate, demoDate: DEMO_DATES[s.demoDate].date })}><IconDownload />Download interested members (Excel)</button>
+          <button className="btn-secondary !min-h-[38px] text-sm" onClick={() => downloadInterested(d.members, { rate: p!.rate, demoDate: asOf, society: d.society.name, from: p!.from, to: p!.to })}><IconDownload />Download interested members (Excel)</button>
           <span className="text-muted">Names, phone numbers and herd size, to call each one back.</span>
         </div>
       ) : null}
       <div className="mt-6 max-w-[720px]">
         <h3 className="font-bold">Needs your action</h3>
         <ul className="mt-2 divide-y divide-line overflow-hidden rounded-xl border border-line bg-white">
-          {s.incentive.status === 'approved' ? <li><button className="flex w-full items-center gap-3 px-4 py-3 text-left font-semibold text-primary transition-colors hover:bg-primary-light" onClick={() => go('targets')}><span className="h-2.5 w-2.5 rounded-full bg-marigold" />New approved target from the union: publish to members<IconChevron className="ml-auto" /></button></li> : null}
-          {s.queries.filter((q) => q.status === 'open').length ? <li><button className="flex w-full items-center gap-3 px-4 py-3 text-left font-semibold text-primary transition-colors hover:bg-primary-light" onClick={() => go('queries')}><span className="h-2.5 w-2.5 rounded-full bg-marigold" />{s.queries.filter((q) => q.status === 'open').length} member {s.queries.filter((q) => q.status === 'open').length === 1 ? 'query' : 'queries'} waiting<IconChevron className="ml-auto" /></button></li> : null}
-          {s.incentive.status !== 'approved' && !s.queries.some((q) => q.status === 'open') ? <li className="px-4 py-3 text-muted">Nothing pending.</li> : null}
+          {p?.status === 'approved' ? <li><button className="flex w-full items-center gap-3 px-4 py-3 text-left font-semibold text-primary transition-colors hover:bg-primary-light" onClick={() => go('targets')}><span className="h-2.5 w-2.5 rounded-full bg-marigold" />New approved target from the union: publish to members<IconChevron className="ml-auto" /></button></li> : null}
+          {queries ? <li><button className="flex w-full items-center gap-3 px-4 py-3 text-left font-semibold text-primary transition-colors hover:bg-primary-light" onClick={() => go('queries')}><span className="h-2.5 w-2.5 rounded-full bg-marigold" />{queries} member {queries === 1 ? 'query' : 'queries'} waiting<IconChevron className="ml-auto" /></button></li> : null}
+          {p?.status !== 'approved' && !queries ? <li className="px-4 py-3 text-muted">Nothing pending.</li> : null}
         </ul>
       </div>
     </div>
   );
 }
 
-type SendSlot = 'evening' | 'morning' | 'both';
 const SEND_SLOTS: { id: SendSlot; label: string; when: string; why: string }[] = [
   { id: 'evening', label: 'Evening', when: 'Tomorrow, 7:30 PM (after evening collection)', why: 'Members are home and more likely to listen to the full voice call and discuss it with the family.' },
   { id: 'morning', label: 'Morning', when: 'Tomorrow, 8:00 AM (after morning collection)', why: 'Arrives right after members see their morning litres and fat, but mornings are busy with fodder and field work.' },
@@ -106,21 +122,25 @@ const SEND_SLOTS: { id: SendSlot; label: string; when: string; why: string }[] =
 
 function Targets() {
   const s = useStore();
-  const inc = s.incentive;
+  const { d, act, busy, err } = useSociety();
+  const p = d.program;
+  const [notes, setNotes] = useState<Partial<Record<Lang, string>>>(p?.notes ?? {});
+  const inc = { status: p?.status ?? 'none', rate: p?.rate ?? 0, concern: p?.concern, notes };
   const [prep, setPrep] = useState(false);
   const [concern, setConcern] = useState('');
   const [showConcern, setShowConcern] = useState(false);
   const [justSent, setJustSent] = useState(false);
   const [sendAt, setSendAt] = useState<SendSlot>('evening');
-  const worth = worthToFarmer(DEMO_DATES[s.demoDate].date, inc.rate);
+  const worth = d.preview?.worth ?? 0;
+  const society = d.society.name;
   if (inc.status === 'none' || inc.status === 'submitted' || inc.status === 'rejected') {
-    return (<div><PageTitle title="Targets and incentives" /><div className="rounded-sheet border border-dashed border-line p-10 text-center text-muted">No approved targets from the union yet. {inc.status === 'submitted' ? 'A proposal is awaiting union approval.' : ''}</div></div>);
+    return (<div><PageTitle title="Targets and incentives" /><div className="rounded-sheet border border-dashed border-line p-10 text-center text-muted">No approved targets from the union yet. Approved targets appear here.</div></div>);
   }
   const row = (
     <table className="tbl card w-full overflow-hidden">
       <thead><tr><th>Target</th><th>Period</th><th>Incentive</th><th>Status</th><th></th></tr></thead>
       <tbody><tr>
-        <td>+6% buffalo milk</td><td>1 Apr - 30 Jun 2027</td><td>₹{inc.rate} per kg fat (fixed)</td>
+        <td>+6% buffalo milk</td><td>{fmtDate(p!.from)} - {fmtDate(p!.to)}</td><td>₹{inc.rate} per kg fat (fixed)</td>
         <td><Chip tone={inc.status === 'published' ? 'good' : inc.status === 'concern' ? 'warn' : 'primary'}>{inc.status === 'approved' ? 'Approved by union' : inc.status === 'concern' ? 'Concern raised' : 'Published'}</Chip></td>
         <td>{inc.status === 'approved' ? <button className="btn-primary !min-h-[36px] text-sm" onClick={() => setPrep(true)}>Prepare message</button> : null}</td>
       </tr></tbody>
@@ -131,8 +151,8 @@ function Targets() {
       <div>
         <PageTitle title="Targets and incentives" />{row}
         {inc.status === 'concern' ? <Note>Your concern was sent to the union planner: “{inc.concern}”. The signal stays unpublished until resolved.</Note> : null}
-        {inc.status === 'published' && justSent ? <Delivery /> : null}
-        {inc.status === 'published' ? <Note>Published to all eligible members by app and IVR. Members see it as a message from {FARMER.society}.</Note> : null}
+        {inc.status === 'published' && justSent ? <Delivery total={d.society.members} app={d.reach.app} /> : null}
+        {inc.status === 'published' ? <Note>Published to all eligible members by app and IVR. Members see it as a message from {society}.</Note> : null}
       </div>
     );
   }
@@ -143,7 +163,7 @@ function Targets() {
       <PageTitle title="Prepare member message" chip={<Chip tone="good">Approved by union</Chip>} sub={`Target: +6% buffalo milk, Apr to Jun | Premium ₹${inc.rate} per kg fat (fixed). The amount cannot be edited here.`} />
       <div className="grid gap-4 lg:grid-cols-3">
         {langs.map((l) => {
-          const msg = signalMessage(l.id, { society: FARMER.society, rate: inc.rate, worth });
+          const msg = signalMessage(l.id, { society, rate: inc.rate, worth });
           const note = inc.notes[l.id];
           return (
             <div key={l.id} className="card overflow-hidden">
@@ -164,13 +184,13 @@ function Targets() {
         <div className="mt-3 grid gap-3 lg:grid-cols-3">
           {langs.map((l) => (
             <label key={l.id} className="block text-sm"><span className="font-bold">{l.name}</span>
-              <textarea className="input indic mt-1 h-20" value={inc.notes[l.id] ?? ''} onChange={(e) => s.setIncentive({ notes: { ...inc.notes, [l.id]: e.target.value } })}
+              <textarea className="input indic mt-1 h-20" value={inc.notes[l.id] ?? ''} onChange={(e) => setNotes({ ...notes, [l.id]: e.target.value })}
                 placeholder={l.id === 'en' ? 'e.g. Subsidised maize seed at the society from 1 March.' : ''} /></label>
           ))}
         </div>
       </div>
       <div className="mt-4 grid gap-4 md:grid-cols-2">
-        <div className="card p-4 text-sm"><div className="font-bold">Audience</div>All eligible members (412): 298 by app, 114 by voice call (IVR)<br /><span className="text-xs text-muted">Feature-phone members get the same message by voice call at the same time.</span></div>
+        <div className="card p-4 text-sm"><div className="font-bold">Audience</div>All eligible members ({d.society.members}): {d.reach.app} by app, {d.reach.voice} by voice call (IVR)<br /><span className="text-xs text-muted">Feature-phone members get the same message by voice call at the same time.</span></div>
         <div className="card p-4 text-sm"><div className="font-bold">Send at</div>
           <div className="mt-2"><Segmented options={SEND_SLOTS.map((x) => ({ id: x.id, label: x.label }))} value={sendAt} onChange={setSendAt} /></div>
           <div className="mt-2">{SEND_SLOTS.find((x) => x.id === sendAt)!.when}</div>
@@ -182,31 +202,32 @@ function Targets() {
           <div className="font-bold">Raise a concern with the union</div>
           <textarea className="input mt-2 h-20" value={concern} onChange={(e) => setConcern(e.target.value)} placeholder="e.g. Many of our members have no buffalo; the target is too high." />
           <div className="mt-2 flex gap-2"><button className="btn-quiet" onClick={() => setShowConcern(false)}>Cancel</button>
-            <button className="btn-primary" disabled={!concern.trim()} onClick={() => { s.setIncentive({ status: 'concern', concern }); s.log('Society secretary', `Raised concern: ${concern}`); }}>Send concern</button></div>
+            <button className="btn-primary" disabled={busy || !concern.trim()} onClick={() => act('concern', { text: concern })}>Send concern</button></div>
         </div>
       ) : null}
+      {err ? <p role="alert" className="mt-3 text-sm text-bad">{err}</p> : null}
       <div className="mt-5 flex justify-between">
         <button className="btn-secondary" onClick={() => setShowConcern(true)}>Raise concern</button>
-        <button className="btn-primary" onClick={() => { setJustSent(true); s.setIncentive({ status: 'published' }); s.log('Society secretary', `Published summer buffalo premium (₹${inc.rate}/kg fat, ${PREMIUM_PERIOD.from} to ${PREMIUM_PERIOD.to}) to 412 members, sending ${SEND_SLOTS.find((x) => x.id === sendAt)!.when.toLowerCase()}`); }}>Publish to members</button>
+        <button className="btn-primary" disabled={busy} onClick={async () => { if (await act('publish', { sendSlot: sendAt, notes })) setJustSent(true); }}>{busy ? 'Publishing...' : 'Publish to members'}</button>
       </div>
     </div>
   );
 }
 
 function Members() {
-  const s = useStore();
+  const { d, asOf } = useSociety();
   const [f, setF] = useState<'all' | 'interested' | 'not' | 'ivr'>('all');
   const [busy, setBusy] = useState(false);
-  const apr = s.demoDate === 'apr';
-  const published = s.incentive.status === 'published';
-  const all = memberRows({ published, apr, lang: s.lang, heard: s.farmer.heard, interested: s.farmer.interested });
+  const p = d.program;
+  const published = p?.status === 'published';
+  const all = d.members;
   const nInterested = all.filter((r) => r.status === 'Interested').length;
   const filtered = all.filter((r) => f === 'all' || (f === 'interested' && r.status === 'Interested') || (f === 'not' && r.status === 'Not heard') || (f === 'ivr' && r.device !== 'Smartphone'));
   const rows = filtered.slice(0, 80);
-  const dl = async () => { setBusy(true); try { await downloadInterested(all, { rate: s.incentive.rate, demoDate: DEMO_DATES[s.demoDate].date }); } finally { setBusy(false); } };
+  const dl = async () => { setBusy(true); try { await downloadInterested(all, { rate: p!.rate, demoDate: asOf, society: d.society.name, from: p!.from, to: p!.to }); } finally { setBusy(false); } };
   return (
     <div>
-      <PageTitle title="Members" sub={`${TOTAL_MEMBERS} members. ${filtered.length > rows.length ? `Showing the first ${rows.length} of ${filtered.length}.` : `Showing ${filtered.length}.`}`} />
+      <PageTitle title="Members" sub={`${d.society.members} members. ${filtered.length > rows.length ? `Showing the first ${rows.length} of ${filtered.length}.` : `Showing ${filtered.length}.`}`} />
       <div className="mb-3 flex flex-wrap items-center gap-3">
         <Segmented options={[{ id: 'all', label: 'All' }, { id: 'interested', label: 'Interested' }, { id: 'not', label: 'Not heard' }, { id: 'ivr', label: 'IVR only' }]} value={f} onChange={(v) => setF(v as typeof f)} />
         <button className="btn-secondary ml-auto !min-h-[38px] text-sm" disabled={!published || !nInterested || busy} onClick={dl} title={!published ? 'Available once a signal is published' : undefined}>
@@ -218,7 +239,7 @@ function Members() {
         <table className="tbl w-full min-w-[760px]">
           <thead><tr><th>ID</th><th>Name</th><th>Mobile</th><th>Device</th><th>Language</th><th>Herd</th><th>Avg L/day</th><th>Signal status</th></tr></thead>
           <tbody>{rows.map((r) => (
-            <tr key={r.id} className={r.isDemoFarmer ? 'bg-primary-light' : 'hover:bg-alt'}><td>{r.id}</td><td>{r.name}<div className="text-xs text-muted">{r.village}</div></td><td className="num whitespace-nowrap">{r.mobile}</td><td className="text-xs">{r.device}</td><td>{r.lang.toUpperCase()}</td><td className="whitespace-nowrap text-xs">{r.buffaloes} buf, {r.cows} cow</td><td className="num">{r.litres.toFixed(1)}</td>
+            <tr key={r.id} className={r.isDemoFarmer ? 'bg-primary-light' : 'hover:bg-alt'}><td>{r.code}</td><td>{r.name}<div className="text-xs text-muted">{r.village}</div></td><td className="num whitespace-nowrap">{r.mobile ?? '-'}</td><td className="text-xs">{r.device}</td><td>{r.lang.toUpperCase()}</td><td className="whitespace-nowrap text-xs">{r.buffaloes} buf, {r.cows} cow</td><td className="num">{r.litres.toFixed(1)}</td>
               <td>{r.status === '-' ? <span className="text-muted">-</span> : <Chip tone={r.status === 'Interested' ? 'good' : r.status === 'Heard' ? 'primary' : 'neutral'}>{r.status}</Chip>}</td></tr>
           ))}</tbody>
         </table>
@@ -231,31 +252,32 @@ function Members() {
 const IconDownload = () => (<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M12 4v11M7 10l5 5 5-5M5 20h14" /></svg>);
 
 function Queries() {
-  const s = useStore();
+  const { d, act, busy } = useSociety();
   const [reply, setReply] = useState<Record<string, string>>({});
+  const queries = d.queries;
   return (
     <div>
       <PageTitle title="Member queries" sub="Questions the assistant could not answer, disputes and data requests (BR-11)." />
-      {s.queries.length === 0 ? <div className="rounded-sheet border border-dashed border-line p-10 text-center text-muted">No queries yet. Questions the farmer app cannot answer land here.</div> : null}
+      {queries.length === 0 ? <div className="rounded-sheet border border-dashed border-line p-10 text-center text-muted">No queries yet. Questions the farmer app cannot answer land here.</div> : null}
       <div className="space-y-3">
-        {s.queries.map((q) => (
+        {queries.map((q) => (
           <div key={q.id} className="card animate-view-in p-4">
-            <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1"><b>{q.id}</b><span>{FARMER.name}</span><Chip>{q.lang.toUpperCase()}</Chip><span className="text-xs text-muted">{new Date(q.at).toLocaleString('en-IN')}</span>
+            <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1"><b>{q.code}</b><span>{q.farmerName}</span><Chip>{q.lang.toUpperCase()}</Chip><span className="text-xs text-muted">{new Date(q.at).toLocaleString('en-IN')}</span>
               <span className="ml-auto"><Chip tone={q.status === 'open' ? 'warn' : 'good'}>{q.status === 'open' ? 'waiting for society' : 'replied'}</Chip></span></div>
             <div className="mt-2 space-y-1.5">
-              {threadOf(q).map((m, i) => (
+              {q.messages.map((m, i) => (
                 <div key={i} className={`flex ${m.from === 'society' ? 'justify-end' : ''}`}>
                   <div className={`max-w-[85%] rounded-xl px-3 py-2 text-sm ${m.from === 'society' ? 'bg-good-light' : 'bg-fill'}`}>
-                    <div className="text-[11px] font-semibold text-muted">{m.from === 'society' ? 'Society' : FARMER.name}</div>
+                    <div className="text-[11px] font-semibold text-muted">{m.from === 'society' ? 'Society' : q.farmerName}</div>
                     <div className="indic">{m.text}</div>
                   </div>
                 </div>
               ))}
             </div>
             {q.status === 'resolved' && q.farmerSeen ? <div className="mt-1 text-right text-[11px] text-muted">Seen by farmer</div> : null}
-            <form className="mt-2 flex gap-2" onSubmit={(e) => { e.preventDefault(); if (reply[q.id]?.trim()) { s.replyQuery(q.id, reply[q.id].trim()); setReply({ ...reply, [q.id]: '' }); } }}>
+            <form className="mt-2 flex gap-2" onSubmit={(e) => { e.preventDefault(); if (reply[q.id]?.trim()) { void act('reply', { queryId: q.id, text: reply[q.id].trim() }); setReply({ ...reply, [q.id]: '' }); } }}>
               <input className="input" placeholder={q.status === 'open' ? 'Type a reply (sent to the farmer in their language)' : 'Add another reply'} value={reply[q.id] ?? ''} onChange={(e) => setReply({ ...reply, [q.id]: e.target.value })} />
-              <button className="btn-primary" type="submit" disabled={!reply[q.id]?.trim()}>Send</button>
+              <button className="btn-primary" type="submit" disabled={busy || !reply[q.id]?.trim()}>Send</button>
             </form>
           </div>
         ))}
@@ -265,26 +287,30 @@ function Queries() {
 }
 
 function Reports() {
-  const s = useStore();
-  const published = s.incentive.status === 'published';
-  const apr = s.demoDate === 'apr';
-  const data = ['Jan', 'Feb', 'Mar', 'Apr'].map((m, i) => ({ m, buffalo: [2950, 2880, 2600, 2310][i], target: i === 3 && published ? 2360 : null }));
+  const { d, asOf } = useSociety();
+  const p = d.program;
+  const published = p?.status === 'published';
+  const complete = asOf.endsWith('-30') || asOf.endsWith('-31');
+  const months = d.monthly.filter((m) => complete || m.month < asOf.slice(0, 7));
+  const inPremium = (m: string) => !!p && m >= p.from.slice(0, 7) && m <= p.to.slice(0, 7);
+  // target: 6% above the same month last year (approximated by the month's lean-season expectation)
+  const data = months.map((m) => ({ m: fmtMonth(m.month).split(' ')[0], buffalo: m.buffalo, target: published && inPremium(m.month) ? Math.round(m.buffalo / 1.04 * 1.06 / 10) * 10 : null }));
+  const premiumMonth = months.find((m) => inPremium(m.month));
   return (
     <div>
       <PageTitle title="Reports" />
       <div className="card p-5"><div className="font-bold">Buffalo milk collection (litres per day, monthly average)</div>
-        <div className="mt-3 h-64"><ResponsiveContainer><BarChart data={apr ? data : data.slice(0, 3)}><CartesianGrid vertical={false} stroke={CHART.grid} /><XAxis dataKey="m" tickLine={false} axisLine={false} /><YAxis tickLine={false} axisLine={false} /><Tooltip cursor={{ fill: '#F4F8FC' }} /><Legend iconType="circle" />
+        <div className="mt-3 h-64"><ResponsiveContainer><BarChart data={data}><CartesianGrid vertical={false} stroke={CHART.grid} /><XAxis dataKey="m" tickLine={false} axisLine={false} /><YAxis tickLine={false} axisLine={false} /><Tooltip cursor={{ fill: '#F4F8FC' }} /><Legend iconType="circle" />
           <Bar dataKey="buffalo" name="Collected" fill={CHART.indigo} radius={[6, 6, 0, 0]} /><Bar dataKey="target" name="Target" fill={CHART.marigold} radius={[6, 6, 0, 0]} /></BarChart></ResponsiveContainer></div>
-        <Note>Demo figures. Lean-season fall is expected; the target is set against last year&apos;s April.</Note>
+        <Note>From the society&apos;s daily collection records (synthetic demo data). Lean-season fall is expected; the target is set against last year&apos;s same month.</Note>
       </div>
-      {published && apr ? <div className="mt-4 max-w-[420px]"><Stat label="Premium paid to members in April (society total)" value={inr(2310 * 30 * 1.03 * 0.07 * s.incentive.rate)} tone="good" /></div> : null}
+      {published && premiumMonth ? <div className="mt-4 max-w-[420px]"><Stat label={`Premium paid to members in ${fmtMonth(premiumMonth.month)} (society total)`} value={inr(premiumMonth.buffalo * 30 * 1.03 * 0.07 * p!.rate)} tone="good" /></div> : null}
     </div>
   );
 }
 
 // Shown once, right after Publish: each dot is a member; they light up as the message goes out.
-function Delivery() {
-  const total = 412, app = 298;
+function Delivery({ total, app }: { total: number; app: number }) {
   return (
     <div className="mt-5 max-w-[720px] animate-view-in rounded-sheet border border-line bg-white p-5">
       <div className="flex items-baseline justify-between gap-4">

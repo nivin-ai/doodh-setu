@@ -7,15 +7,3 @@ export const DEMO_DATES: Record<DemoDateKey, { date: string; label: string; note
 };
 
 export const PREMIUM_PERIOD = { from: '2027-04-01', to: '2027-06-30' };
-
-export const FARMER = {
-  name: 'Farmer',
-  first: 'Farmer',
-  memberId: '0412',
-  society: 'Anand Milk Society',
-  village: 'Bakrol, Anand district',
-  phone: '+91 98250 40412',
-  animals: { buffalo: 3, cow: 1 },
-};
-
-export const UNION = 'Kheda District Union (demo)';

@@ -1,4 +1,4 @@
-# Doodh Setu prototype (v0.2)
+# Doodh Setu prototype (v0.3, database-first)
 
 A working prototype of Doodh Setu, a demand-to-farmer intelligence platform for a dairy cooperative, built for the SPJIMR BDA assignment on the Amul case. All data is synthetic, calibrated to public Indian patterns. It is not real Amul data.
 
@@ -9,16 +9,57 @@ A working prototype of Doodh Setu, a demand-to-farmer intelligence platform for 
 | Demo home | `/` | Demo script, demo date switch, reset |
 | Farmer app | `/farmer` | A member farmer (Gujarati, Hindi, English, voice) |
 | Society dashboard | `/society` | Society secretary |
-| Planner console | `/planner` | Union planner, approver and marketing manager (Marketing menu) |
+| Planner console | `/planner` | Union planner and approver |
 | Lender desk (DairyFin) | `/lender` | Bank case officer |
 
-Open the apps in separate tabs of the same browser. Demo state is shared through the browser's local storage, so actions in one app show up in the others. "Reset demo" on the home page starts again.
+All business data is in Postgres (Supabase, or a local demo database when none is configured). Open the apps in separate tabs: an action in one shows up in the others within seconds. "Reset demo" on the home page clears what was done during a demo.
+
+## Architecture
+
+```
+React screens (components/*App.tsx)          UI only; Zustand holds demo date, language, playback, acting role
+   |  useResource / postJson (lib/client/api.ts)   loading, error and cross-tab refresh
+   v
+API routes (app/api/{farmer,society,planner,lender,demo})   check the signed cookie -> database scope
+   v
+Services (lib/server/services)               workflow rules: maker-checker, consent, publishing, audit
+   v
+Repositories (lib/server/repositories)       every SQL statement, typed results
+   v
+lib/server/db.ts                             postgres.js (DATABASE_URL) or PGlite (local), each request inside
+   v                                         `set local role doodh_app` + scope settings
+Postgres with row-level security (supabase/migrations)
+```
+
+- Domain calculations stay pure and are shared by server and browser: `lib/farmer.ts` (payments), `lib/demand.ts` (forecast), `lib/union.ts` (product mix, milk gap, incentive), `lib/geo.ts` (zone demand). They take data as arguments; none of them holds data.
+- Synthetic data generators live in `lib/demo-data/` and are used only by the seed (`lib/server/seed.ts`).
+- Database setup, seeding and the access model: see `supabase/README.md`.
+
+## Environment variables
+
+| Variable | Needed for | Notes |
+|---|---|---|
+| `DATABASE_URL` | Supabase Postgres | Transaction pooler connection string (port 6543). Server only. Without it the local demo database (PGlite) is used. |
+| `AUTH_SECRET` | Signing sign-in cookies | Any long random string. Without it a built-in demo value is used. |
+| `ALLOW_DEMO_RESET` | Reset button | Set to `false` to disable the public demo reset. |
+| `PGLITE_DIR` | Local demo database | Optional folder to keep local data between restarts. |
+| `ANTHROPIC_API_KEY`, `GNANI_API_KEY`, `CART_KEY` | AI answers, voice, map tiles | As before. |
+
+## Checks
+
+```
+npm run typecheck   # TypeScript
+npm test            # migrations, seed, services and row-level security against a local Postgres (PGlite)
+npm run build
+```
 
 ## Staff sign-in
 
-The planner console (`/planner`), society dashboard (`/society`) and lender desk (`/lender`) form one staff website behind a sign-in (`/login`). `middleware.ts` checks a signed cookie and the user's role on every request to those pages. The farmer app (`/farmer`) needs no sign-in and can be added to a phone home screen (`public/farmer.webmanifest`).
+The planner console (`/planner`), society dashboard (`/society`) and lender desk (`/lender`) form one staff website behind a sign-in (`/login`). Accounts are in the `app_users` table (scrypt password hashes). `middleware.ts` checks the signed cookie and role on every page request; each API request is checked again and runs with that user's database scope, so row-level security applies.
 
-Demo accounts (`lib/users.ts`): planner / planner123, approver / approver123, secretary / society123, lender / lender123, admin / admin123. The admin can switch between all three modules and act as planner or approver. Set `AUTH_SECRET` in Vercel to a long random string.
+The farmer app (`/farmer`) has no staff sign-in. In this prototype the browser is registered as the demo farmer's phone (`/api/farmer/session`); a real app would verify the member's mobile number with a one-time code. It can be added to a phone home screen (`public/farmer.webmanifest`).
+
+Demo accounts: planner / planner123, approver / approver123, secretary / society123, lender / lender123, admin / admin123. The admin can switch between all three modules and act as planner or approver.
 
 ## Voice (Gnani.ai)
 
@@ -43,16 +84,9 @@ If no key is set, or the AI call fails, the app falls back to the fixed rule-bas
 
 The demand map uses CARTO basemap tiles, which need a free key. Set `CART_KEY` in `.env.local` and in Vercel (Project, Settings, Environment Variables), then redeploy. The key is built into the page at build time, so a redeploy is required after adding it. Without a key, the map falls back to plain OpenStreetMap tiles.
 
-## Database (DairyFin consent and loan records)
+## Database
 
-The finance journey records DPDP consents, loan applications and data-sharing events. Without a database they stay in the browser. To store them in Supabase:
-
-1. Create a free project at https://supabase.com.
-2. In the project, open SQL Editor, paste `supabase/schema.sql` and run it. It creates the tables from the Farmers Database Structure (farmers, farmer_kyc, farmer_properties, credit_profiles, loan_applications, consent_records, data_sharing_logs, insurance tables and more) with demo data, and turns on row level security.
-3. From Project Settings, API, copy the Project URL and the service role key into `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` in `.env.local` and in Vercel. Redeploy.
-4. Open `/api/health`: it should show `"db":"supabase"`. New consents and applications then appear in the Table Editor.
-
-KYC is stored as masked values and provider tokens only; raw Aadhaar or PAN numbers are never stored.
+See `supabase/README.md` for migrations, the seed, the local demo database and the access model. KYC is stored as masked values and provider tokens only; raw Aadhaar or PAN numbers are never stored.
 
 ## Deploy to Vercel (no Git needed)
 
@@ -75,22 +109,24 @@ npm run dev                  # open http://localhost:3000
 
 ## How the numbers work
 
-- `lib/farmer.ts`: daily milk collection for one farmer (3 buffaloes, 1 cow), seasonal yields, fat and SNF, payment at ₹865 per kg fat plus SNF bonus, and an exact breakdown of why the monthly payment changed.
-- `lib/demand.ts`: two years of daily sales for 5 products in Mumbai and Ahmedabad across dealers, quick commerce and Amul Shop, driven by growth, temperature, festivals and weekends. The forecast uses last year's pattern adjusted for growth and temperature, with an 80% range and a 28-day accuracy check.
+- `lib/farmer.ts`: payment at ₹865 per kg fat plus SNF bonus and any premium, from the farmer's milk pours (`milk_transactions`), and an exact breakdown of why the monthly payment changed.
+- `lib/demand.ts`: the forecast over daily sales by city, product and channel (`demand_daily`) and temperatures (`weather_daily`): last year's pattern adjusted for growth and temperature, with an 80% range and a 28-day accuracy check. The synthetic sales themselves are generated by `lib/demo-data/demand.ts` at seed time.
 - `lib/union.ts`: product-mix plan (buffalo milk goes first to the products that earn most per litre of buffalo milk, within demand, capacity, buffalo milk and the liquid milk commitment), the buffalo milk gap, the incentive model (cost, value gained from the extra milk only, break-even check; the mix gain is reported separately) and the fairness view by society size.
-- `lib/marketing.ts`: Module G. Demand opportunities by product and city from the forecast; a supply check that holds any campaign the product-mix plan cannot supply (for example paneer and curd while buffalo milk is short); campaign value counted as extra milk sold as that product instead of going to powder; results against control areas; farmer segments with a weekly message cap; and the monthly "where your milk goes" story.
 - `lib/ask.ts`: the farmer assistant answers only from approved content and the farmer's own records, in three languages.
 - `lib/i18n.ts`: farmer-facing text in Gujarati, Hindi and English. Starter translations: review with native speakers before field use.
 
-## What changed in v0.2
+## What changed in v0.3
 
-- Planner console: new Marketing menu (opportunities, campaigns with supply check, results, farmer segments and milk story). New user: Neha (marketing).
-- Society dashboard: Milk story page to publish the union's monthly story.
-- Farmer app: "Where your milk goes this summer" card and story, read aloud.
+- Postgres is the source of truth: migrations, row-level security by role, typed repositories and services, a repeatable synthetic seed, and a local PGlite database when no `DATABASE_URL` is set.
+- Every module reads and writes through the API; Zustand keeps only UI preferences.
+- Staff accounts moved to the database; lender access depends on the farmer's active consent and every case view is logged.
 
 ## Known limits
 
-- Demo state lives in one browser; there is no database or login.
+- Staff accounts are demo accounts; there is no Supabase Auth, password reset or multi-factor sign-in yet. The farmer app trusts a demo device registration instead of an OTP.
+- Without `DATABASE_URL` the local database resets when the server restarts and is not shared between server instances.
+- Other members' responses to a published premium are simulated (`demo_simulation_traits`), and the results card's buffalo-milk lift and stockout figures are illustrative.
+- Only the demo farmer has individual milk pours; other members show herd-based yields.
 - Translation of free-text local notes is manual (Gnani.ai provides voice, not translation).
 - The forecast and optimiser are simple, explainable models for demonstration.
 - Lender offers are demo offers, not real bank products.

@@ -2,8 +2,8 @@
 import dynamic from 'next/dynamic';
 import { useEffect, useMemo, useState } from 'react';
 import { Area, AreaChart, ReferenceLine, ResponsiveContainer, XAxis, YAxis } from 'recharts';
-import { CITIES, PRODUCTS, type City, type ProductId } from '@/lib/demand';
-import { WEEKS, ZONES, heatWeek, zoneWeeks } from '@/lib/geo';
+import { CITIES, type City, type DemandData, type ProductId } from '@/lib/demand';
+import { WEEKS, heatWeek, zoneWeeks, type Zone } from '@/lib/geo';
 import { fmtDate, num, pct } from '@/lib/util';
 import { CHART, Chip, Count, Note, PageTitle, Segmented } from './ui';
 import type { Cell } from './ZoneMap';
@@ -33,7 +33,9 @@ const pill = (on: boolean) => `rounded-full border px-3 py-1 text-sm transition-
 
 function riskWord(r: number) { return r > 1.1 ? 'Will run out' : r > 1 ? 'Over capacity' : r > 0.97 ? 'Tight' : 'Comfortable'; }
 
-export default function DemandMap() {
+// Demand and zones come from the planner's database-backed dataset (props)
+export default function DemandMap({ D, zones: ZONES }: { D: DemandData; zones: Zone[] }) {
+  const PRODUCTS = D.products;
   const [city, setCity] = useState<City>('Ahmedabad');
   const [prod, setProd] = useState<ProductId>('icecream');
   const [metric, setMetric] = useState<Metric>('risk');
@@ -49,8 +51,8 @@ export default function DemandMap() {
   useEffect(() => { setSel(null); }, [city]);
 
   const p = PRODUCTS.find((x) => x.id === prod)!;
-  const zones = useMemo(() => ZONES.filter((z) => z.city === city), [city]);
-  const data = useMemo(() => zoneWeeks(city, prod), [city, prod]);
+  const zones = useMemo(() => ZONES.filter((z) => z.city === city), [ZONES, city]);
+  const data = useMemo(() => zoneWeeks(D, ZONES, city, prod), [D, ZONES, city, prod]);
   const maxDemand = useMemo(() => Math.max(...data.flat().map((d) => d.demand)), [data]);
 
   const fmt = (m: Metric, d: (typeof data)[0][0]) => m === 'risk' ? `${riskWord(d.risk)}: quick commerce demand at ${pct(d.risk)} of stock planned`
@@ -64,14 +66,14 @@ export default function DemandMap() {
   });
 
   const week = WEEKS[w];
-  const hot = heatWeek(week);
+  const hot = heatWeek(D, week);
   const now = zones.map((z, i) => ({ z, d: data[i][w] }));
   const over = now.filter((x) => x.d.risk > 1);
   const shortUnits = over.reduce((a, x) => a + (x.d.qcomm - x.d.capacity), 0);
   const top = [...now].sort((a, b) => b.d.risk - a.d.risk).slice(0, 5);
   const selIdx = sel ? zones.findIndex((z) => z.id === sel) : -1;
   const selZone = selIdx >= 0 ? zones[selIdx] : null;
-  const heatFrom = WEEKS.findIndex(heatWeek), heatTo = WEEKS.length - 1 - [...WEEKS].reverse().findIndex(heatWeek);
+  const heatFrom = WEEKS.findIndex((w) => heatWeek(D, w)), heatTo = WEEKS.length - 1 - [...WEEKS].reverse().findIndex((w) => heatWeek(D, w));
 
   return (
     <div>

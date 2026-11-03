@@ -10,6 +10,7 @@ export async function middleware(req: NextRequest) {
     url.searchParams.set('next', req.nextUrl.pathname);
     return NextResponse.redirect(url);
   }
+  if (s.r === 'farmer') return NextResponse.redirect(new URL('/login', req.url));
   if (!ACCESS[mod]?.includes(s.r)) return NextResponse.redirect(new URL(HOME_FOR[s.r], req.url));
   return NextResponse.next();
 }

@@ -1,15 +1,18 @@
 'use client';
 // Planner console: one screen (FRD P-01). Sections follow the planning story:
 // data health -> demand -> product mix -> milk gap and incentive (with approval) -> results.
-import { useEffect, useMemo, useState } from 'react';
+import { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import { useSession } from './session';
+import { postJson, useResource } from '@/lib/client/api';
+import { ErrorState, Loading } from './DataState';
+import type { PlannerDataset, PlannerWorkflow, ProgramView, SourceRow } from '@/lib/types/api';
 import {
   Area, Bar, BarChart, CartesianGrid, Cell, ComposedChart, LabelList, Legend, Line, ReferenceArea, ResponsiveContainer, Tooltip, XAxis, YAxis,
 } from 'recharts';
 import { useStore } from '@/lib/store';
-import { DEMO_DATES, UNION } from '@/lib/demo';
-import { CITIES, HEATWAVE, PRODUCTS, forecast, type City, type ProductId } from '@/lib/demand';
-import { FAIRNESS_MIN, MIX, MONTHS_LEAN, customPlan, SOCIETIES, SOURCES, SUGGESTED_IDS, incentiveImpact, milkGap, plan } from '@/lib/union';
+import { DEMO_DATES } from '@/lib/demo';
+import { CITIES, forecast, type City, type ProductId } from '@/lib/demand';
+import { FAIRNESS_MIN, customPlan, flexible, incentiveImpact, milkGap, plan, planModel, suggestedSocietyIds, type PlanModel } from '@/lib/union';
 import { fmtDate, inr, inrShort, num, pct } from '@/lib/util';
 import { CHART, Chip, ConsoleShell, Count, Note, PageTitle, Segmented, Stat } from './ui';
 import { IconCheck } from './icons';
@@ -21,23 +24,61 @@ const ASOF = DEMO_DATES['mar'].date;
 
 const USERS = { planner: 'Planner', approver: 'Approver' };
 
+// Everything the planner sections share: the planning data from the database, the model built on
+// it, the current proposal (workflow) and the draft the planner is editing.
+interface Ctx {
+  P: PlanModel; ds: PlannerDataset; wf: PlannerWorkflow; role: 'planner' | 'approver';
+  program: ProgramView | null; draft: { rate: number; ids: string[] }; setDraft: (d: Partial<{ rate: number; ids: string[] }>) => void;
+  act: (action: string, body?: Record<string, unknown>) => Promise<void>; busy: boolean; err: string;
+}
+const PlannerCtx = createContext<Ctx | null>(null);
+const usePlanner = () => useContext(PlannerCtx) as Ctx;
+const useZones = () => usePlanner().ds.zones;
+
 export default function PlannerApp() {
   const s = useStore();
   const { user } = useSession();
-  // The signed-in role decides who can submit (planner) and who can approve (approver).
-  useEffect(() => { if (user && (user.role === 'planner' || user.role === 'approver') && s.plannerUser !== user.role) s.set({ plannerUser: user.role }); }, [user?.role]); // eslint-disable-line react-hooks/exhaustive-deps
+  // The signed-in role decides who can submit (planner) and who can approve (approver);
+  // the demo admin chooses in the header.
+  const role: 'planner' | 'approver' = user?.role === 'admin' ? s.plannerUser : user?.role === 'approver' ? 'approver' : 'planner';
+  const acting = user?.role === 'admin' ? `&actingAs=${role}` : '';
+  const dsR = useResource<PlannerDataset>(user ? `/api/planner?view=dataset&asOf=${ASOF}${acting}` : null);
+  const wfR = useResource<PlannerWorkflow>(user ? `/api/planner?view=workflow${acting}` : null, { poll: 6000 });
+  const P = useMemo(() => (dsR.data ? planModel(dsR.data) : null), [dsR.data]);
+  const [draft, setDraftState] = useState<{ rate: number; ids: string[] } | null>(null);
+  useEffect(() => { if (P && !draft) setDraftState({ rate: 40, ids: suggestedSocietyIds(P) }); }, [P, draft]);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState('');
+  const act = async (action: string, body: Record<string, unknown> = {}) => {
+    setBusy(true); setErr('');
+    try { await postJson('/api/planner', { ...body, action, actingAs: role }); await wfR.refresh(); }
+    catch (e) { setErr(e instanceof Error ? e.message : String(e)); }
+    finally { setBusy(false); }
+  };
+  const program = wfR.data?.program ?? null;
+  const ctx: Ctx | null = P && dsR.data && wfR.data && draft ? {
+    P, ds: dsR.data, wf: wfR.data, role, program, busy, err, act,
+    // a submitted or approved proposal shows its own terms; a rejected one can be edited again
+    draft: program && program.status !== 'rejected' ? { rate: program.rate, ids: program.societyIds } : draft,
+    setDraft: (d) => setDraftState((x) => ({ ...(x as { rate: number; ids: string[] }), ...d })),
+  } : null;
+  const failed = dsR.error ?? wfR.error;
   return (
-    <ConsoleShell title="Planner console" place={UNION} menu={[]} active="planner" onSelect={() => undefined}
+    <ConsoleShell title="Planner console" place={dsR.data?.union.name} menu={[]} active="planner" onSelect={() => undefined}
       right={user?.role === 'admin' ? <label className="flex items-center gap-2 text-white/75">Acting as
         <select className="rounded-lg border-0 bg-white/10 px-2.5 py-1 text-white outline-none [&>option]:text-ink" value={s.plannerUser === 'approver' ? 'approver' : 'planner'} onChange={(e) => s.set({ plannerUser: e.target.value as 'planner' | 'approver' })}>
           <option value="planner">{USERS.planner}</option><option value="approver">{USERS.approver}</option></select></label> : null}>
-      <Overview />
-      <div className="mt-6 grid gap-5 xl:grid-cols-2">
-        <Section n={1} title="Demand forecast" sub="What will sell, where and when"><DemandCard /></Section>
-        <Section n={2} title="Product mix" sub="Best use of each litre of milk"><MixCard /></Section>
-        <Section n={3} title="Buffalo milk gap and incentive" sub="Close the gap with a premium; approver signs off" wide><GapIncentive /></Section>
-        <Section n={4} title="Results" sub="What the premium signal delivered" wide><ResultsCard /></Section>
-      </div>
+      {failed && !ctx ? <ErrorState error={failed} onRetry={() => { void dsR.refresh(); void wfR.refresh(); }} /> : !ctx ? <Loading label="Loading planning data from the database..." /> : (
+        <PlannerCtx.Provider value={ctx}>
+          <Overview />
+          <div className="mt-6 grid gap-5 xl:grid-cols-2">
+            <Section n={1} title="Demand forecast" sub="What will sell, where and when"><DemandCard /></Section>
+            <Section n={2} title="Product mix" sub="Best use of each litre of milk"><MixCard /></Section>
+            <Section n={3} title="Buffalo milk gap and incentive" sub="Close the gap with a premium; approver signs off" wide><GapIncentive /></Section>
+            <Section n={4} title="Results" sub="What the premium signal delivered" wide><ResultsCard /></Section>
+          </div>
+        </PlannerCtx.Provider>
+      )}
     </ConsoleShell>
   );
 }
@@ -72,13 +113,15 @@ const Mini = ({ label, value, tone }: { label: string; value: string; tone?: 'go
 
 // ---------- Overview: headline numbers and data health ----------
 function Overview() {
-  const s = useStore();
-  const inc = s.incentive;
-  const cur = useMemo(() => plan(ASOF, MONTHS_LEAN[0], false), []);
-  const rec = useMemo(() => plan(ASOF, MONTHS_LEAN[0], true), []);
-  const gap = useMemo(() => milkGap(ASOF), []);
+  const { P, ds, program } = usePlanner();
+  const SOURCES: SourceRow[] = ds.sources;
+  const HEATWAVE = P.D.heatwave;
+  const status = program?.status ?? 'none';
+  const cur = useMemo(() => plan(P, ASOF, P.months[0], false), [P]);
+  const rec = useMemo(() => plan(P, ASOF, P.months[0], true), [P]);
+  const gap = useMemo(() => milkGap(P, ASOF), [P]);
   const peak = gap.reduce((a, b) => (b.gapPct > a.gapPct ? b : a), gap[0]);
-  const f = useMemo(() => forecast('Mumbai', 'curd', ASOF, 90, 75), []);
+  const f = useMemo(() => forecast(P.D, 'Mumbai', 'curd', ASOF, 90, 75), [P]);
   return (
     <div>
       <PageTitle title="Planning overview" sub={`Plan for April to June 2027, made on ${fmtDate(ASOF)} from all sales channels, weather and festivals.`} />
@@ -86,7 +129,7 @@ function Overview() {
         <Stat label="Heatwave lift, curd in Mumbai" value={`+${pct(f.heatLift, 1)}`} sub={`${fmtDate(HEATWAVE.from)} to ${fmtDate(HEATWAVE.to)}`} tone="warn" />
         <Stat label="Value per litre, April" value={`+₹${(rec.valuePerLitre - cur.valuePerLitre).toFixed(2)}`} sub="Recommended vs current mix" tone="good" />
         <Stat label="Buffalo milk gap" value={pct(peak.gapPct, 1)} sub={`Peak in ${peak.month}, ${num(peak.gap)} L/day`} tone="bad" />
-        <Stat label="Incentive" value={inc.status === 'none' ? 'Not started' : inc.status[0].toUpperCase() + inc.status.slice(1)} sub={inc.status === 'none' ? 'Design it in section 3' : `₹${inc.rate} per kg fat`} tone={inc.status === 'published' || inc.status === 'approved' ? 'good' : undefined} />
+        <Stat label="Incentive" value={status === 'none' ? 'Not started' : status[0].toUpperCase() + status.slice(1)} sub={status === 'none' ? 'Design it in section 3' : `₹${program?.rate} per kg fat`} tone={status === 'published' || status === 'approved' ? 'good' : undefined} />
       </div>
       <div className="mt-4 flex flex-wrap items-center gap-2 text-sm">
         <span className="font-semibold">Data health:</span>
@@ -108,7 +151,9 @@ function Overview() {
 function DemandCard() {
   const [city, setCity] = useState<City>('Mumbai');
   const [prod, setProd] = useState<ProductId>('curd');
-  const f = useMemo(() => forecast(city, prod, ASOF, 90, 75), [city, prod]);
+  const { P } = usePlanner();
+  const PRODUCTS = P.D.products, HEATWAVE = P.D.heatwave;
+  const f = useMemo(() => forecast(P.D, city, prod, ASOF, 90, 75), [P, city, prod]);
   const p = PRODUCTS.find((x) => x.id === prod)!;
   const data = f.points.map((x) => ({ ...x, range: x.lo !== undefined ? [x.lo, x.hi] : undefined, label: x.date.slice(5) }));
   return (
@@ -137,7 +182,7 @@ function DemandCard() {
         </ComposedChart>
       </ResponsiveContainer></div>
       <Note>Forecast accuracy over the last 28 days: {pct(1 - f.mape, 0)}. Built from dealer orders, quick commerce, Amul Shop and the weather outlook.</Note>
-      <Details label="neighbourhood demand map"><DemandMap /></Details>
+      <Details label="neighbourhood demand map"><DemandMap D={P.D} zones={useZones()} /></Details>
     </div>
   );
 }
@@ -146,25 +191,28 @@ function DemandCard() {
 const EDITABLE = ['lassi', 'icecream', 'curd', 'paneer'];
 function MixCard() {
   const [mi, setMi] = useState(0);
-  const [accepted, setAccepted] = useState<Record<number, 'recommended' | 'adjusted'>>({});
+  const { P, wf, act, role } = usePlanner();
+  const MONTHS_LEAN = P.months, MIX = P.mix;
+  // local override after editing; otherwise what was accepted in the database
+  const [accepted, setAccepted] = useState<Record<number, 'recommended' | 'adjusted' | undefined>>({});
   const [edit, setEdit] = useState(false);
   const [adj, setAdj] = useState<Record<number, Record<string, number>>>({});
   const month = MONTHS_LEAN[mi];
-  const cur = useMemo(() => plan(ASOF, month, false), [mi]); // eslint-disable-line react-hooks/exhaustive-deps
-  const rec = useMemo(() => plan(ASOF, month, true), [mi]); // eslint-disable-line react-hooks/exhaustive-deps
+  const cur = useMemo(() => plan(P, ASOF, month, false), [P, mi]); // eslint-disable-line react-hooks/exhaustive-deps
+  const rec = useMemo(() => plan(P, ASOF, month, true), [P, mi]); // eslint-disable-line react-hooks/exhaustive-deps
   const mine = adj[mi];
   const adjusted = !!mine && EDITABLE.some((id) => Math.round(mine[id]) !== Math.round(rec.rows.find((r) => r.id === id)!.litres));
-  const shown = useMemo(() => (adjusted ? customPlan(ASOF, month, mine) : { ...rec, buffaloShort: 0, milkShort: 0 }), [mi, mine, adjusted]); // eslint-disable-line react-hooks/exhaustive-deps
+  const shown = useMemo(() => (adjusted ? customPlan(P, ASOF, month, mine) : { ...rec, buffaloShort: 0, milkShort: 0 }), [P, mi, mine, adjusted]); // eslint-disable-line react-hooks/exhaustive-deps
   const feasible = shown.buffaloShort < 1 && shown.milkShort < 1;
-  const done = accepted[mi];
+  const done = mi in accepted ? accepted[mi] : wf.acceptedPlans.find((x) => x.month === month.from)?.kind;
   const planName = adjusted ? 'Your plan' : 'Recommended';
   const chart = shown.rows.map((r) => ({ name: r.name, current: Math.round(cur.rows.find((c) => c.id === r.id)!.litres / 1000), planned: Math.round(r.litres / 1000) }));
   const days = Number(month.to.slice(8, 10));
   const setL = (id: string, v: number) => {
-    setAccepted((a) => { const n = { ...a }; delete n[mi]; return n; });
+    setAccepted((a) => ({ ...a, [mi]: undefined }));
     setAdj((a) => ({ ...a, [mi]: { ...Object.fromEntries(EDITABLE.map((k) => [k, rec.rows.find((r) => r.id === k)!.litres])), ...a[mi], [id]: v } }));
   };
-  const reset = () => { setAdj((a) => { const n = { ...a }; delete n[mi]; return n; }); setAccepted((a) => { const n = { ...a }; delete n[mi]; return n; }); };
+  const reset = () => { setAdj((a) => { const n = { ...a }; delete n[mi]; return n; }); setAccepted((a) => ({ ...a, [mi]: undefined })); };
   return (
     <div>
       <Segmented options={MONTHS_LEAN.map((m, i) => ({ id: String(i), label: m.label }))} value={String(mi)} onChange={(v) => setMi(Number(v))} />
@@ -209,7 +257,7 @@ function MixCard() {
       ) : null}
 
       <div className="mt-3 flex flex-wrap items-center gap-3">
-        <button className={done ? 'btn bg-good-light text-good' : 'btn-primary'} disabled={!!done || !feasible} onClick={() => setAccepted((a) => ({ ...a, [mi]: adjusted ? 'adjusted' : 'recommended' }))}>
+        <button className={done ? 'btn bg-good-light text-good' : 'btn-primary'} disabled={!!done || !feasible || role !== 'planner'} onClick={async () => { const kind = adjusted ? 'adjusted' : 'recommended'; await act('acceptPlan', { month: month.from, kind, lines: Object.fromEntries(shown.rows.map((r) => [r.id, r.litres])) }); setAccepted((a) => ({ ...a, [mi]: kind })); }}>
           {done ? <><IconCheck size={18} animate />{done === 'adjusted' ? 'Adjusted plan accepted' : 'Plan accepted'}</> : adjusted ? 'Accept adjusted plan' : 'Accept recommended plan'}</button>
         <span className="text-sm text-muted">{!feasible ? 'Not enough buffalo milk for this plan. Reduce a product or raise buffalo supply (section 3).' : done ? `Sent to plant scheduling for ${month.label}.${shown.rows.find((x) => x.id === 'paneer')!.litres < shown.rows.find((x) => x.id === 'paneer')!.want - 1 ? ' Paneer is still short of buffalo milk (section 3).' : ''}` : 'Liquid milk commitments are always met first (BR-15).'}</span>
       </div>
@@ -228,23 +276,25 @@ function MixCard() {
 // ---------- Society picker ----------
 const SIZES = ['small', 'medium', 'large'] as const;
 const REGIONS = ['North', 'Central', 'South'] as const;
-const TOTAL_BUF = SOCIETIES.reduce((x, s) => x + s.buffaloLitres, 0);
 const cap = (w: string) => w[0].toUpperCase() + w.slice(1);
 
-function SocietyPicker({ ids, locked, onChange }: { ids: number[]; locked: boolean; onChange: (ids: number[]) => void }) {
+function SocietyPicker({ ids, locked, onChange }: { ids: string[]; locked: boolean; onChange: (ids: string[]) => void }) {
+  const { P } = usePlanner();
+  const SOCIETIES = P.societies;
+  const TOTAL_BUF = SOCIETIES.reduce((x, s) => x + s.buffaloLitres, 0) || 1;
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState('');
   const [size, setSize] = useState<'all' | (typeof SIZES)[number]>('all');
   const [region, setRegion] = useState<'all' | (typeof REGIONS)[number]>('all');
   const [minL, setMinL] = useState(0);
   const sel = useMemo(() => new Set(ids), [ids]);
-  const maxL = useMemo(() => Math.max(...SOCIETIES.map((x) => x.buffaloLitres)), []);
+  const maxL = useMemo(() => Math.max(...SOCIETIES.map((x) => x.buffaloLitres)), [SOCIETIES]);
   const shown = useMemo(() => SOCIETIES
     .filter((x) => (size === 'all' || x.size === size) && (region === 'all' || x.region === region) && x.buffaloLitres >= minL && x.name.toLowerCase().includes(q.trim().toLowerCase()))
     .sort((a, b) => b.buffaloLitres - a.buffaloLitres), [q, size, region, minL]);
   const coverage = SOCIETIES.filter((x) => sel.has(x.id)).reduce((t, x) => t + x.buffaloLitres, 0) / TOTAL_BUF;
-  const set = (next: Set<number>) => onChange(SOCIETIES.filter((x) => next.has(x.id)).map((x) => x.id));
-  const toggle = (id: number) => { const n = new Set(sel); n.has(id) ? n.delete(id) : n.add(id); set(n); };
+  const set = (next: Set<string>) => onChange(SOCIETIES.filter((x) => next.has(x.id)).map((x) => x.id));
+  const toggle = (id: string) => { const n = new Set(sel); n.has(id) ? n.delete(id) : n.add(id); set(n); };
   const addShown = () => { const n = new Set(sel); shown.forEach((x) => n.add(x.id)); set(n); };
   const clearShown = () => { const n = new Set(sel); shown.forEach((x) => n.delete(x.id)); set(n); };
   const groupState = (pred: (x: (typeof SOCIETIES)[number]) => boolean) => {
@@ -265,7 +315,7 @@ function SocietyPicker({ ids, locked, onChange }: { ids: number[]; locked: boole
       <div className="flex flex-wrap items-center gap-2 text-sm">
         <span><b className="num">{ids.length}</b> <span className="text-muted">of {SOCIETIES.length} societies, {pct(coverage)} of buffalo milk</span></span>
         <div className="ml-auto flex flex-wrap gap-1.5">
-          <button disabled={locked} className="btn-quiet !min-h-[30px] !px-3 text-xs" onClick={() => onChange(SUGGESTED_IDS)}>Suggested</button>
+          <button disabled={locked} className="btn-quiet !min-h-[30px] !px-3 text-xs" onClick={() => onChange(suggestedSocietyIds(P))}>Suggested</button>
           <button disabled={locked} className="btn-quiet !min-h-[30px] !px-3 text-xs" onClick={() => onChange(SOCIETIES.map((x) => x.id))}>All</button>
           <button disabled={locked} className="btn-quiet !min-h-[30px] !px-3 text-xs" onClick={() => onChange([])}>None</button>
         </div>
@@ -319,12 +369,12 @@ function SocietyPicker({ ids, locked, onChange }: { ids: number[]; locked: boole
 
 // ---------- 3. Milk gap, incentive and approval ----------
 function GapIncentive() {
-  const s = useStore();
-  const inc = s.incentive;
-  const g = useMemo(() => milkGap(ASOF), []);
+  const { P, program, draft, setDraft, act, busy, err, role } = usePlanner();
+  const inc = { status: program?.status ?? 'none', rate: draft.rate, ids: draft.ids };
+  const g = useMemo(() => milkGap(P, ASOF), [P]);
   const gapData = g.map((x) => ({ month: x.month, req: Math.round(x.required / 1000), exp: Math.round(x.expected / 1000) }));
   const locked = inc.status !== 'none' && inc.status !== 'rejected';
-  const imp = useMemo(() => incentiveImpact(ASOF, inc.rate, inc.ids), [inc.rate, inc.ids]);
+  const imp = useMemo(() => incentiveImpact(P, ASOF, inc.rate, inc.ids), [P, inc.rate, inc.ids]);
   const [why, setWhy] = useState('');
   return (
     <div className="grid gap-5 lg:grid-cols-[0.8fr_1.2fr]">
@@ -344,9 +394,9 @@ function GapIncentive() {
           {inc.status !== 'none' ? <Chip tone={inc.status === 'published' || inc.status === 'approved' ? 'good' : inc.status === 'rejected' ? 'bad' : 'primary'}>{inc.status}</Chip> : null}</div>
         <div className="mt-2 flex items-center gap-4">
           <div className="num shrink-0 whitespace-nowrap font-display text-[28px] font-bold leading-tight text-primary">₹<Count value={inc.rate} format={(n) => String(Math.round(n))} /><span className="text-[14px] font-semibold text-muted"> per kg fat</span></div>
-          <input type="range" aria-label="Amount per kg fat" min={0} max={80} step={1} value={inc.rate} disabled={locked} onChange={(e) => s.setIncentive({ rate: Number(e.target.value) })} className="w-full accent-[#0B5CAD]" />
+          <input type="range" aria-label="Amount per kg fat" min={0} max={80} step={1} value={inc.rate} disabled={locked} onChange={(e) => setDraft({ rate: Number(e.target.value) })} className="w-full accent-[#0B5CAD]" />
         </div>
-        <SocietyPicker ids={inc.ids} locked={locked} onChange={(ids) => s.setIncentive({ ids })} />
+        <SocietyPicker ids={inc.ids} locked={locked} onChange={(ids) => setDraft({ ids })} />
         <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
           <Mini label="Extra buffalo milk" value={`+${num(imp.extraLitresPerDay)} L/day`} />
           <Mini label="Cost" value={inrShort(imp.cost)} />
@@ -372,10 +422,11 @@ function GapIncentive() {
         {!imp.fairOk && !locked ? <textarea className="input mt-3 h-14" placeholder="Written justification required to submit below the board minimum" value={why} onChange={(e) => setWhy(e.target.value)} /> : null}
         <div className="mt-3 flex flex-wrap items-center gap-3">
           {!locked ? (
-            <button className="btn-primary" disabled={!imp.capOk || (!imp.fairOk && !why.trim()) || s.plannerUser !== 'planner'}
-              onClick={() => { s.setIncentive({ status: 'submitted', submittedBy: USERS.planner, reason: why }); s.log(USERS.planner, `Submitted lean-season premium ₹${inc.rate}/kg fat for ${imp.societies} societies`); }}>Submit for approval</button>
+            <button className="btn-primary" disabled={busy || !imp.capOk || (!imp.fairOk && !why.trim()) || role !== 'planner'}
+              onClick={() => act('submit', { rate: inc.rate, societyIds: inc.ids, justification: why })}>{busy ? 'Saving...' : 'Submit for approval'}</button>
           ) : null}
-          {s.plannerUser !== 'planner' && !locked ? <span className="text-sm text-muted">Only the planner can submit. Sign in as the planner to submit.</span> : null}
+          {role !== 'planner' && !locked ? <span className="text-sm text-muted">Only the planner can submit. Sign in as the planner to submit.</span> : null}
+          {err ? <span role="alert" className="text-sm text-bad">{err}</span> : null}
         </div>
         <Approval />
       </div>
@@ -384,30 +435,32 @@ function GapIncentive() {
 }
 
 function Approval() {
-  const s = useStore();
-  const inc = s.incentive;
+  const { program, act, busy, role } = usePlanner();
   const [reason, setReason] = useState('');
+  if (!program) return null;
+  const inc = program;
+  if (inc.status === 'rejected') return <div className="mt-3 rounded-xl border border-bad/30 bg-bad-light p-3 text-sm"><b className="text-bad">Rejected by the approver.</b> {inc.rejectedReason ? <>“{inc.rejectedReason}”</> : null} Adjust the premium and submit again.</div>;
   if (inc.status === 'concern') {
     return (
       <div className="mt-3 rounded-xl border border-marigold-deep/40 bg-warn-light p-3 text-sm">
         <div className="font-bold text-warn">Concern raised by Anand Milk Society</div><p className="mt-1">“{inc.concern}”</p>
-        <button className="btn-primary mt-2" onClick={() => { s.setIncentive({ status: 'approved', concern: undefined }); s.log(USERS.planner, 'Responded to society concern; target confirmed'); }}>Respond and confirm target</button>
+        <button className="btn-primary mt-2" disabled={busy || role !== 'planner'} onClick={() => act('confirm', { programId: inc.id })}>Respond and confirm target</button>
       </div>
     );
   }
   if (inc.status === 'approved') return <div className="mt-3 text-sm text-good"><IconCheck size={16} className="inline" /> Approved by {inc.approvedBy ?? USERS.approver}. Released to societies to publish.</div>;
   if (inc.status === 'published') return <div className="mt-3 text-sm text-good"><IconCheck size={16} className="inline" /> Published by societies. See results in section 4.</div>;
   if (inc.status !== 'submitted') return null;
-  const isApprover = s.plannerUser === 'approver';
+  const isApprover = role === 'approver';
   return (
     <div className="mt-3 rounded-xl border border-primary/30 bg-primary-light p-3 text-sm">
       <div className="font-bold text-primary">Waiting for approval</div>
-      <div>Submitted by {inc.submittedBy}. The person who submits cannot approve (maker-checker, BR-17).{inc.reason ? <> Justification: “{inc.reason}”</> : null}</div>
+      <div>Submitted by {inc.submittedBy}. The person who submits cannot approve (maker-checker, BR-17).{inc.justification ? <> Justification: “{inc.justification}”</> : null}</div>
       {isApprover ? (
         <div className="mt-2 flex flex-wrap items-center gap-2">
-          <button className="btn-primary" onClick={() => { s.setIncentive({ status: 'approved', approvedBy: USERS.approver }); s.log(USERS.approver, 'Approved lean-season premium; released to societies'); }}>Approve and release</button>
+          <button className="btn-primary" disabled={busy} onClick={() => act('decide', { programId: inc.id, decision: 'approve' })}>Approve and release</button>
           <input className="input max-w-[220px]" placeholder="Reason (to reject)" value={reason} onChange={(e) => setReason(e.target.value)} />
-          <button className="btn-quiet" disabled={!reason.trim()} onClick={() => { s.setIncentive({ status: 'rejected', reason }); s.log(USERS.approver, `Rejected: ${reason}`); }}>Reject</button>
+          <button className="btn-quiet" disabled={busy || !reason.trim()} onClick={() => act('decide', { programId: inc.id, decision: 'reject', reason })}>Reject</button>
         </div>
       ) : <div className="mt-1 text-muted">Only the approver can decide. Sign in as the approver to approve or reject.</div>}
     </div>
@@ -417,10 +470,11 @@ function Approval() {
 // ---------- 4. Results ----------
 function ResultsCard() {
   const s = useStore();
-  const inc = s.incentive;
+  const { P, program, wf, draft } = usePlanner();
+  const inc = { status: program?.status ?? 'none', rate: draft.rate, ids: draft.ids };
   const apr = s.demoDate === 'apr';
   const published = inc.status === 'published';
-  const imp = incentiveImpact(ASOF, inc.rate, inc.ids);
+  const imp = incentiveImpact(P, ASOF, inc.rate, inc.ids);
   const aprCost = imp.cost / 3, aprValue = imp.valueGained / 3;
   const ctrl = [{ g: 'Pilot societies', v: 865 + 36 + inc.rate }, { g: 'Control societies', v: 865 + 34 }];
   return (
@@ -450,7 +504,7 @@ function ResultsCard() {
         </>
       ) : null}
       <Details label="audit log">
-        <ul className="max-h-56 divide-y divide-[#E6EDF5] overflow-auto text-[13px]">{s.audit.length ? s.audit.map((a, i) => <li key={i} className="grid grid-cols-[140px_1fr] gap-3 py-1.5"><span className="num text-muted">{new Date(a.at).toLocaleString('en-IN')}</span><span><b className="font-semibold">{a.actor}</b>: {a.action}</span></li>) : <li className="py-1.5 text-muted">No actions yet.</li>}</ul>
+        <ul className="max-h-56 divide-y divide-[#E6EDF5] overflow-auto text-[13px]">{wf.audit.length ? wf.audit.map((a, i) => <li key={i} className="grid grid-cols-[140px_1fr] gap-3 py-1.5"><span className="num text-muted">{new Date(a.at).toLocaleString('en-IN')}</span><span><b className="font-semibold">{a.actor}</b>: {a.action}</span></li>) : <li className="py-1.5 text-muted">No actions yet.</li>}</ul>
       </Details>
     </div>
   );

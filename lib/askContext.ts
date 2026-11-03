@@ -1,6 +1,6 @@
 // Builds the facts the AI assistant may use: the farmer's own records plus approved content (BR-26).
-import { BASE_RATE, SNF_BONUS_PER_POINT, dayTotals, explainChange, monthKeysUpTo, monthSummary, type MonthSummary, type Premium } from './farmer';
-import { FARMER } from './demo';
+import { BASE_RATE, SNF_BONUS_PER_POINT, dayTotals, explainChange, monthKeysUpTo, monthSummary, type MonthSummary, type Premium, type Session } from './farmer';
+import type { FarmerProfile } from './types/api';
 
 const r0 = (n: number) => Math.round(n).toLocaleString('en-IN');
 const monthName = (k: string) => new Date(k + '-01T00:00:00Z').toLocaleString('en-IN', { month: 'long', year: 'numeric', timeZone: 'UTC' });
@@ -9,18 +9,18 @@ function line(m: MonthSummary) {
   return `${monthName(m.key)} (${m.days} days): ${r0(m.litres)} litres, avg fat ${m.avgFat.toFixed(1)}%, buffalo SNF ${m.avgSnfBuffalo.toFixed(2)}%, base Rs ${r0(m.base)} + SNF bonus Rs ${r0(m.snf)} + premium Rs ${r0(m.premium)} = total Rs ${r0(m.total)}`;
 }
 
-export function buildContext(today: string, premium: Premium | null): string {
+export function buildContext(profile: FarmerProfile, sessions: Session[], today: string, premium: Premium | null): string {
   const monthEnd = today.endsWith('-30') || today.endsWith('-31');
   const keys = monthKeysUpTo(today, 4);
-  const months = keys.map((k) => monthSummary(k, premium, today));
+  const months = keys.map((k) => monthSummary(sessions, k, premium, today));
   const current = months[3];
   const complete = monthEnd ? months.slice(1) : months.slice(0, 3);
   const last = complete[complete.length - 1], before = complete[complete.length - 2];
   const reasons = explainChange(before, last).map((r) => `${r.key === 'volume' ? 'milk quantity' : r.key === 'snf' ? 'SNF quality bonus' : 'buffalo milk premium'} ${r.amount >= 0 ? '+' : '-'}Rs ${r0(Math.abs(r.amount))}`);
-  const d = dayTotals(today, premium);
+  const d = dayTotals(sessions, today, premium);
   return [
     `TODAY: ${today}`,
-    `FARMER: ${FARMER.name}, member ${FARMER.memberId} of ${FARMER.society}, ${FARMER.village}. Animals: ${FARMER.animals.buffalo} buffaloes, ${FARMER.animals.cow} cow.`,
+    `FARMER: ${profile.name}, member ${profile.code} of ${profile.society.name}, ${profile.village}. Animals: ${profile.animals.buffalo} buffaloes, ${profile.animals.cow} cow.`,
     '',
     'TODAY\'S COLLECTION:',
     `Morning ${d.am.toFixed(1)} litres, evening ${d.pm.toFixed(1)} litres. Buffalo fat ${d.fat.toFixed(1)}%, buffalo SNF ${d.snf.toFixed(1)}%. Today's amount Rs ${r0(d.amount)}.`,

@@ -1,25 +1,10 @@
 // DairyFin loan data sharing (FRD finance journey; DPDP Act 2023 consent).
-// Demo records follow the Farmers Database Structure (tables farmer_kyc, farmer_properties,
-// credit_profiles, consent_records, data_sharing_logs). Values are simulated and masked:
-// raw Aadhaar or PAN numbers are never held in the app, only tokens and masked display values.
+// The records themselves (farmer_kyc, farmer_properties, credit_profiles, consent_records,
+// data_sharing_logs) are in the database. This file holds the consent notice texts and categories.
+// Raw Aadhaar or PAN numbers are never held anywhere, only provider tokens and masked values.
 import type { Lang } from './i18n';
 
 export const NOTICE_VERSION = 'DPDP-LOAN-1.0';
-
-// farmer_kyc (document_number_masked only; the token lives with the verification provider)
-export const KYC = [
-  { type: 'Aadhaar', masked: 'XXXX XXXX 4821', status: 'verified', provider: 'DigiLocker (demo)', token: 'tok_aad_7f3c' },
-  { type: 'PAN', masked: 'XXXXX6413K', status: 'verified', provider: 'NSDL PAN verification (demo)', token: 'tok_pan_19be' },
-];
-
-// farmer_properties
-export const PROPERTY = {
-  ownership: 'Owned', survey: '214/2', village: 'Bakrol', district: 'Anand', state: 'Gujarat',
-  area: 1.2, unit: 'acres', use: 'Mixed (fodder and cattle shed)', record: '7/12 land record extract', status: 'verified',
-};
-
-// credit_profiles (mock_data = true)
-export const CREDIT = { bureau: 'CIBIL', score: 742, loans: 1, outstanding: 18000, retrieved: 'With consent, at application', mock: true };
 
 // Data categories covered by the loan consent (consent_records.collection_categories)
 export const CATEGORIES = ['identity_kyc', 'land_property', 'credit_history', 'milk_income'] as const;
@@ -117,9 +102,3 @@ const gu: FinText = {
 // Starter translations: legal text must be reviewed before field use. Other languages show English.
 const FIN: Partial<Record<Lang, FinText>> = { en, hi, gu };
 export const fin = (lang: Lang): FinText => FIN[lang] ?? en;
-
-// Sends finance events to the database (Supabase) when it is configured. Never blocks the app.
-export function syncFinance(event: Record<string, unknown>) {
-  if (typeof window === 'undefined') return;
-  fetch('/api/finance', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(event) }).catch(() => undefined);
-}

@@ -1,14 +1,18 @@
 'use client';
 import { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { Bar, BarChart, Cell, ResponsiveContainer, XAxis, YAxis, Tooltip, LabelList } from 'recharts';
-import { useStore, activePremium, threadOf, type AppStatus } from '@/lib/store';
-import { DEMO_DATES, FARMER } from '@/lib/demo';
+import { useStore } from '@/lib/store';
+import { postJson, useResource } from '@/lib/client/api';
+import type { AppStatus, Consent, CreditRecord, FarmerData, KycRecord, LoanProduct, PropertyRecord } from '@/lib/types/api';
+import type { Session } from '@/lib/farmer';
+import { ErrorState, Loading } from './DataState';
+import { DEMO_DATES } from '@/lib/demo';
 import { LANGS, PHRASES, SIGNAL_NEED, SIGNAL_TITLE, signalMessage, t, type Lang } from '@/lib/i18n';
 import { dayTotals, explainChange, monthKeysUpTo, monthSummary, worthToFarmer, type MonthSummary } from '@/lib/farmer';
 import { answer } from '@/lib/ask';
 import { speak } from '@/lib/voice';
 import { buildContext } from '@/lib/askContext';
-import { CREDIT, KYC, NOTICE_VERSION, PROPERTY, CATEGORIES, fin } from '@/lib/finance';
+import { NOTICE_VERSION, CATEGORIES, fin } from '@/lib/finance';
 import { fmtMonth, inr, MONTHS } from '@/lib/util';
 import { Chip, Count, PlayButton, Segmented, CHART } from './ui';
 import { IconBack, IconBank, IconCheck, IconChevron, IconChat, IconHome, IconNotice, IconPhone, IconRupee, IconSend, IconUser } from './icons';
@@ -16,10 +20,14 @@ import { IconBack, IconBank, IconCheck, IconChevron, IconChat, IconHome, IconNot
 type Tab = 'home' | 'earnings' | 'signals' | 'finance' | 'ask';
 type Sub = null | 'signal' | 'why' | 'income' | 'afford' | 'products' | 'consent' | 'loanConsent' | 'apply' | 'tracker' | 'profile';
 
-const PRODUCTS_DEMO = [
-  { id: 'gpb', lender: 'Gramin Partner Bank (demo)', name: 'Cattle loan', purpose: 'cattle', min: 25000, max: 200000, rate: 10.5, maxTenure: 36, feePct: 1, elig: 'Society member for 12+ months with regular milk supply' },
-  { id: 'scn', lender: 'Sahakari Credit NBFC (demo)', name: 'Feed and fodder credit', purpose: 'feed', min: 10000, max: 100000, rate: 13, maxTenure: 24, feePct: 1.5, elig: 'Society member for 6+ months' },
-];
+// Farmer records from the database for the farmer currently signed in on this phone. FarmerApp
+// sets these on every render from the API response; they are render-time aliases, never stored.
+let FARMER = { name: '', memberId: '', society: '', village: '', animals: { buffalo: 0, cow: 0 }, phone: '' as string | null };
+let PRODUCTS_DEMO: LoanProduct[] = [];
+let KYC: KycRecord[] = [];
+let PROPERTY: PropertyRecord = { ownership: '-', survey: '-', village: '-', district: '-', state: '-', area: 0, unit: '', use: '-', record: '-', status: '-' };
+let CREDIT: CreditRecord = { bureau: '-', score: 0, loans: 0, outstanding: 0, mock: true };
+let SESS: Session[] = [];
 
 export const emiFor = (p: number, annual: number, n: number) => {
   const r = annual / 1200;
@@ -28,9 +36,18 @@ export const emiFor = (p: number, annual: number, n: number) => {
 
 
 type Ctx = {
-  s: ReturnType<typeof useStore.getState>; lang: Lang; T: (k: string) => string; today: string; premium: ReturnType<typeof activePremium>;
+  s: FarmerState; fd: FarmerData; lang: Lang; T: (k: string) => string; today: string; premium: FarmerData['premium'];
   months: MonthSummary[]; worth: number; published: boolean; go: (t: Tab, s?: Sub) => void; setSub: (s: Sub) => void; flash: (m: string) => void;
   sub: Sub; loan: Loan; setLoan: (l: Loan) => void; whyMonth: string | null; setWhyMonth: (m: string | null) => void; monthKeys: string[]; complete: boolean;
+};
+type FarmerState = ReturnType<typeof useStore.getState> & {
+  farmer: { heard: boolean; interested: boolean; correction: boolean; signalConsent: boolean }; incentive: { status: string; rate: number };
+  queries: FarmerData['queries']; consents: Consent[]; application: FarmerData['application'];
+  setFarmer: (p: Partial<{ heard: boolean; interested: boolean; correction: boolean }>) => unknown; log: (...a: unknown[]) => void;
+  addQuery: (text: string, l: string) => unknown; markRepliesSeen: () => unknown; followUpQuery: (id: string, text: string) => unknown;
+  grantConsent: (c: Partial<Consent>) => Promise<unknown>; withdrawConsent: (id: string) => unknown;
+  submitApplication: (a: { product: string; amount: number; tenure: number; rate?: number; lender?: string; consentId?: string; loanConsentId?: string }) => unknown;
+  uploadDoc: () => unknown; setAppStatus: (st: AppStatus, note?: string) => unknown;
 };
 type Loan = { amount: number; rate: number; tenure: number; expenses: number; existing: number; product: string; purpose: string };
 const F = createContext<Ctx | null>(null);
@@ -38,12 +55,53 @@ const useF = () => useContext(F) as Ctx;
 
 const STATUS_TONE: Record<AppStatus, 'primary' | 'good' | 'warn' | 'bad' | 'neutral'> = { submitted: 'primary', in_review: 'primary', more_info: 'warn', approved: 'good', declined: 'bad', withdrawn: 'neutral' };
 
+// Registers this browser as the demo farmer's phone (prototype; a real app verifies the mobile number)
+const registerDevice = () => fetch('/api/farmer/session', { method: 'POST' }).then(() => undefined);
+
 export default function FarmerApp() {
-  const s = useStore();
-  const lang = s.lang;
+  const ui = useStore();
+  const lang = ui.lang;
+  const today = DEMO_DATES[ui.demoDate].date;
+  const r = useResource<FarmerData>(`/api/farmer?asOf=${today}`, { poll: 5000, before: registerDevice });
+  if (!r.data) {
+    return <div className="mx-auto max-w-[430px]">{r.error ? <ErrorState error={r.error} onRetry={r.refresh} /> : <Loading label="Loading your records..." />}</div>;
+  }
+  return <FarmerScreens fd={r.data} refresh={r.refresh} />;
+}
+
+function FarmerScreens({ fd, refresh }: { fd: FarmerData; refresh: () => Promise<void> }) {
+  const ui = useStore();
+  const lang = ui.lang;
   const T = (k: string) => t(lang, k);
-  const today = DEMO_DATES[s.demoDate].date;
-  const premium = activePremium(s);
+  const today = DEMO_DATES[ui.demoDate].date;
+  const premium = fd.premium;
+  FARMER = { name: fd.profile.name, memberId: fd.profile.code, society: fd.profile.society.name, village: fd.profile.village, animals: fd.profile.animals, phone: fd.profile.phone };
+  PRODUCTS_DEMO = fd.finance.products; KYC = fd.finance.kyc; SESS = fd.sessions;
+  if (fd.finance.property) PROPERTY = fd.finance.property;
+  if (fd.finance.credit) CREDIT = fd.finance.credit;
+  const act = async (action: string, body: Record<string, unknown> = {}) => { const out = await postJson<Record<string, unknown>>('/api/farmer', { ...body, action, asOf: today }); await refresh(); return out; };
+  // Same shape the screens used before, now backed by the API: reads come from fd, writes go to the server
+  const s = {
+    ...ui,
+    farmer: { heard: fd.response.heard, interested: fd.response.interested, correction: fd.profile.correctionRequested, signalConsent: true },
+    incentive: { status: premium ? 'published' : 'none', rate: premium?.rate ?? 0 },
+    queries: fd.queries, consents: fd.consents, application: fd.application,
+    setFarmer: (p: Partial<{ heard: boolean; interested: boolean; correction: boolean }>) => {
+      if (p.interested) return act('interested');
+      if (p.heard) return act('heard');
+      if (p.correction) return act('correction', { lang });
+    },
+    log: (..._a: unknown[]) => undefined, // actions are audited on the server
+    addQuery: (text: string, l: string) => act('ask', { text, lang: l }),
+    markRepliesSeen: () => act('markSeen'),
+    followUpQuery: (queryId: string, text: string) => act('followUp', { queryId, text }),
+    grantConsent: (c: Partial<Consent>) => act('grantConsent', { consent: c }),
+    withdrawConsent: (consentId: string) => act('withdrawConsent', { consentId }),
+    submitApplication: (a: { product: string; amount: number; tenure: number; loanConsentId?: string }) =>
+      act('apply', { application: { productCode: PRODUCTS_DEMO.find((p) => p.name === a.product)?.id, amount: a.amount, tenure: a.tenure, loanConsentId: a.loanConsentId } }),
+    uploadDoc: () => act('uploadDoc'),
+    setAppStatus: (st: AppStatus, _note?: string) => (st === 'withdrawn' ? act('withdrawApplication') : undefined),
+  };
   const [tab, setTab] = useState<Tab>('home');
   const [sub, setSub] = useState<Sub>(null);
   const [toast, setToast] = useState<string | null>(null);
@@ -61,11 +119,11 @@ export default function FarmerApp() {
   const complete = today.endsWith('-30') || today.endsWith('-31');
   const monthKeys = monthKeysUpTo(today, 7);
   const completeKeys = complete ? monthKeys : monthKeys.slice(0, -1);
-  const months = useMemo(() => completeKeys.map((k) => monthSummary(k, premium, today)), [today, premium?.rate, s.incentive.status]); // eslint-disable-line react-hooks/exhaustive-deps
-  const worth = worthToFarmer(today, s.incentive.rate);
+  const months = useMemo(() => completeKeys.map((k) => monthSummary(SESS, k, premium, today)), [fd.sessions, today, premium?.rate]); // eslint-disable-line react-hooks/exhaustive-deps
+  const worth = worthToFarmer(SESS, today, s.incentive.rate);
   const published = s.incentive.status === 'published';
 
-  const ctx = { s, lang, T, today, premium, months, worth, published, go, setSub, sub, flash, loan, setLoan, whyMonth, setWhyMonth, monthKeys, complete };
+  const ctx = { s, fd, lang, T, today, premium, months, worth, published, go, setSub, sub, flash, loan, setLoan, whyMonth, setWhyMonth, monthKeys, complete };
   const TABS: { id: Tab; Icon: (p: { size?: number }) => JSX.Element }[] = [
     { id: 'home', Icon: IconHome }, { id: 'earnings', Icon: IconRupee }, { id: 'signals', Icon: IconNotice }, { id: 'finance', Icon: IconBank }, { id: 'ask', Icon: IconChat },
   ];
@@ -121,12 +179,12 @@ export default function FarmerApp() {
 // ---------------- Home ----------------
 function Home() {
   const { s, lang, T, today, premium, worth, published, go, monthKeys } = useF();
-  const d = dayTotals(today, premium);
+  const d = dayTotals(SESS, today, premium);
   const curKey = today.slice(0, 7);
-  const cur = monthSummary(curKey, premium, today);
+  const cur = monthSummary(SESS, curKey, premium, today);
   const day = Number(today.slice(8, 10));
   const prevKey = monthKeys[monthKeys.length - 2];
-  const prevTotal = Math.round(monthSummary(prevKey, premium, `${prevKey}-${String(day).padStart(2, '0')}`).total);
+  const prevTotal = Math.round(monthSummary(SESS, prevKey, premium, `${prevKey}-${String(day).padStart(2, '0')}`).total);
   const diff = cur.total - prevTotal;
   const good = d.snf >= 8.8;
   const litres = d.am + d.pm;
@@ -317,7 +375,7 @@ function Why() {
 // ---------------- Finance (DairyFin) ----------------
 function Finance() {
   const { s, lang, T, today, premium, months, worth, published, go, setSub, flash, loan, setLoan, whyMonth, setWhyMonth, monthKeys, complete , sub } = useF();
-  const last12 = months.length >= 6 ? monthKeysUpTo(today, 13).slice(complete ? 1 : 0, complete ? 13 : 12).map((k) => monthSummary(k, premium, today)) : months;
+  const last12 = months.length >= 6 ? monthKeysUpTo(today, 13).slice(complete ? 1 : 0, complete ? 13 : 12).map((k) => monthSummary(SESS, k, premium, today)) : months;
   const avg6 = Math.round(last12.slice(-6).reduce((x, m) => x + m.total, 0) / 6);
   if (sub === 'income') return <Income list={last12} />;
   if (sub === 'afford') return <Afford list={last12} />;
@@ -448,8 +506,7 @@ function Consent() {
       <div className="grid grid-cols-2 gap-2">
         <button className="btn-secondary !min-h-[52px]" onClick={() => setSub('products')}>{T('notNow')}</button>
         <button className="btn-primary !min-h-[52px]" disabled={!ok} onClick={() => {
-          s.grantConsent({ recipient: p.lender, purpose: 'Assess loan application', scope: 'Milk quantity and payments', period: 'Last 12 months', language: lang, method: 'digital' });
-          setSub('loanConsent');
+          void s.grantConsent({ recipient: p.lender, purpose: 'Assess loan application', scope: 'Milk quantity and payments', period: 'Last 12 months', language: lang, method: 'digital', categories: ['milk_income'] }).then(() => setSub('loanConsent'));
         }}>{T('continue')}</button>
       </div>
     </div>
@@ -503,8 +560,7 @@ function LoanConsent() {
       <div className="grid grid-cols-2 gap-2">
         <button className="btn-secondary !min-h-[52px]" onClick={() => setSub('products')}>{T('notNow')}</button>
         <button className="btn-primary !min-h-[52px]" disabled={!all} onClick={() => {
-          s.grantConsent({ recipient: p.lender, purpose: 'Loan assessment, verification and processing', scope: 'Identity and KYC, land and property records, credit history, milk income', period: 'Until the application is decided, then as the law requires', noticeVersion: NOTICE_VERSION, categories: [...CATEGORIES], method: 'digital', language: lang, statements: 3 });
-          setSub('apply');
+          void s.grantConsent({ recipient: p.lender, purpose: 'Loan assessment, verification and processing', scope: 'Identity and KYC, land and property records, credit history, milk income', period: 'Until the application is decided, then as the law requires', noticeVersion: NOTICE_VERSION, categories: [...CATEGORIES], method: 'digital', language: lang, statements: 3 }).then(() => setSub('apply'));
         }}>{F.agree}</button>
       </div>
     </div>
@@ -529,12 +585,11 @@ function Apply() {
           <div className="flex items-center gap-2"><IconCheck size={18} className="text-good" />{T('bankAcc')}</div>
           <div className="flex items-center gap-2 text-muted"><span className="mx-[3px] h-3 w-3 rounded-full border-2 border-line" />{T('cattleQuote')}</div>
         </div>
-        {lc ? <div className="mt-2 text-xs text-muted">{F.version} {lc.noticeVersion}, consent {lc.id}</div> : null}</div>
+        {lc ? <div className="mt-2 text-xs text-muted">{F.version} {lc.noticeVersion}, consent {lc.code}</div> : null}</div>
       <p className="text-sm text-muted">{T('bankDecides')}</p>
       <button className="btn-primary w-full" onClick={() => {
         const c = s.consents.find((x) => x.recipient === p.lender && x.status === 'active' && !x.noticeVersion);
-        s.submitApplication({ product: p.name, lender: p.lender, amount: loan.amount, tenure: loan.tenure, rate: p.rate, consentId: c?.id ?? '', loanConsentId: lc?.id });
-        setSub('tracker');
+        void Promise.resolve(s.submitApplication({ product: p.name, lender: p.lender, amount: loan.amount, tenure: loan.tenure, rate: p.rate, consentId: c?.id ?? '', loanConsentId: lc?.id })).then(() => setSub('tracker'));
       }}>{T('submit')}</button>
     </div>
   );
@@ -571,7 +626,7 @@ type Answer = { text: string; bullets?: string[]; ai: boolean; handoff?: boolean
 const AI_LABEL: Partial<Record<Lang, string>> & { en: string } = { en: 'AI answer from your records', hi: 'आपके रिकॉर्ड से AI जवाब', gu: 'તમારા રેકોર્ડ પરથી AI જવાબ' };
 
 function Ask() {
-  const { s, lang, T, today, premium, flash } = useF();
+  const { s, fd, lang, T, today, premium, flash } = useF();
   const [q, setQ] = useState('');
   const [said, setSaid] = useState<string | null>(null);
   const [ans, setAns] = useState<Answer | null>(null);
@@ -589,12 +644,12 @@ function Ask() {
     setSaid(text); setFb(null); setAns(null); setState('working');
     let a: Answer | null = null, why = 'AI not reachable';
     try {
-      const r = await fetch('/api/ask', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ question: text, lang, name: FARMER.first, history: history.current, context: buildContext(today, premium) }) });
+      const r = await fetch('/api/ask', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ question: text, lang, name: FARMER.name, history: history.current, context: buildContext(fd.profile, SESS, today, premium) }) });
       const j = await r.json().catch(() => ({}));
       if (r.ok) { a = { text: j.text, bullets: j.bullets?.length ? j.bullets : undefined, ai: true, handoff: j.handoff }; history.current = [...history.current, { q: text, a: [j.text, ...(j.bullets ?? [])].join(' ') }].slice(-3); }
       else why = r.status === 501 ? 'AI key not set on the server (ANTHROPIC_API_KEY)' : `AI error: ${String(j.error ?? r.status).slice(0, 120)}`;
     } catch { /* fall back to rule-based answer */ }
-    if (!a) { const f = answer(text, lang, today, premium); a = { text: f.text, bullets: f.bullets, ai: false, handoff: f.intent === 'unknown', why }; }
+    if (!a) { const f = answer(SESS, text, lang, today, premium); a = { text: f.text, bullets: f.bullets, ai: false, handoff: f.intent === 'unknown', why }; }
     setAns(a); setState('idle');
   };
 
@@ -626,7 +681,7 @@ function Ask() {
                   {fresh.includes(q.id) ? <Chip tone="good">{T('newReply')}</Chip> : <Chip tone={q.status === 'open' ? 'warn' : 'good'}>{q.status === 'open' ? T('waitingReply') : T('replied')}</Chip>}
                 </div>
                 <div className="space-y-1.5">
-                  {threadOf(q).map((m, i) => (
+                  {q.messages.map((m, i) => (
                     <div key={i} className={`flex ${m.from === 'farmer' ? 'justify-end' : ''}`}>
                       <div className={`max-w-[85%] rounded-xl px-3 py-2 text-[15px] ${m.from === 'farmer' ? 'bg-primary text-white' : 'bg-fill'}`}>
                         <div className={`text-[11px] font-semibold ${m.from === 'farmer' ? 'text-white/75' : 'text-muted'}`}>{m.from === 'farmer' ? T('you') : FARMER.society}</div>

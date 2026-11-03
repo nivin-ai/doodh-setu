@@ -9,6 +9,8 @@ import { signOut, useSession } from '@/components/session';
 import { HOME_FOR } from '@/lib/roles';
 import { IconBank, IconChevron, IconDrop, IconNotice } from '@/components/icons';
 import { useStore } from '@/lib/store';
+import { useResource } from '@/lib/client/api';
+import type { DemoState } from '@/lib/types/api';
 import { DEMO_DATES, type DemoDateKey } from '@/lib/demo';
 
 const APPS = [
@@ -47,12 +49,15 @@ const APP_ICON: Record<string, (p: { size?: number }) => JSX.Element> = { '/farm
 function Home() {
   const s = useStore();
   const { user } = useSession();
-  const openQ = s.queries.filter((q) => q.status === 'open').length;
+  // Aggregate demo status from the database (counts and statuses only, no records)
+  const ds = useResource<DemoState>('/api/demo', { poll: 5000 });
+  const d = ds.data;
   const state = [
-    { k: 'Incentive', v: s.incentive.status },
-    { k: 'Farmer interested', v: s.farmer.interested ? 'yes' : 'no' },
-    { k: 'Application', v: s.application ? s.application.status : 'none' },
-    { k: 'Open queries', v: String(openQ) },
+    { k: 'Incentive', v: d ? d.incentive : '...' },
+    { k: 'Farmer interested', v: d ? (d.farmerInterested ? 'yes' : 'no') : '...' },
+    { k: 'Application', v: d ? d.application : '...' },
+    { k: 'Open queries', v: d ? String(d.openQueries) : '...' },
+    { k: 'Database', v: d ? (d.db === 'postgres' ? 'Postgres (Supabase)' : 'Local demo database') : '...' },
   ];
   return (
     <div className="min-h-screen bg-milk font-sans">
@@ -168,7 +173,7 @@ function Home() {
                   <div key={x.k} className="flex justify-between py-1.5"><dt className="text-muted">{x.k}</dt><dd key={x.v} className="font-semibold">{x.v}</dd></div>
                 ))}
               </dl>
-              <button className="btn-quiet mt-3 w-full" onClick={() => { if (confirm('Reset the demo to the start?')) s.reset(); }}>Reset demo</button>
+              <button className="btn-quiet mt-3 w-full" onClick={async () => { if (confirm('Reset the demo to the start?')) { await s.reset(); await ds.refresh(); } }}>Reset demo</button>
             </div>
           </aside>
         </div>

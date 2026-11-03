@@ -1,7 +1,8 @@
 -- Doodh Setu / DairyFin database (Supabase Postgres)
 -- Follows "Farmers_Database_Structure.xlsx" (tables 1-16), plus cooperatives and loan_products,
 -- which the structure references as foreign keys.
--- Run once in Supabase: Dashboard > SQL Editor > New query > paste this file > Run.
+-- Migration 0001 (baseline): the original schema.sql, unchanged apart from moving its demo seed
+-- into the seed script. Apply migrations in order; see supabase/README.md.
 -- Row level security is ON for every table with no public policies: only the app's server
 -- (using the service role key) can read or write. Never expose the service role key in the browser.
 
@@ -216,34 +217,3 @@ do $$ declare t text; begin
   foreach t in array array['cooperatives','farmers','farmer_kyc','farmer_addresses','farmer_properties','farmer_documents','cattle','milk_transactions','credit_profiles','lenders','loan_products','loan_applications','loan_documents','consent_records','data_sharing_logs','insurance_policies','insurance_policy_animals','insurance_claims']
   loop execute format('alter table %I enable row level security', t); end loop;
 end $$;
-
--- Demo seed (simulated data; fixed ids so the app can refer to them) ------------------------
-insert into cooperatives (cooperative_id, name, district, state) values
-  ('00000000-0000-4000-8000-000000000001', 'Anand Milk Society', 'Anand', 'Gujarat') on conflict do nothing;
-
-insert into farmers (farmer_id, farmer_code, first_name, last_name, gender, preferred_language, mobile_number, mobile_verified, cooperative_id, registration_date, profile_status) values
-  ('00000000-0000-4000-8000-000000000101', '0412', 'Savitaben', 'Patel', 'Female', 'gu', '+91XXXXXX4410', true, '00000000-0000-4000-8000-000000000001', '2019-06-01', 'active') on conflict do nothing;
-
-insert into farmer_addresses (farmer_id, address_type, village, taluka, district, state, pincode, is_primary) values
-  ('00000000-0000-4000-8000-000000000101', 'residential', 'Bakrol', 'Anand', 'Anand', 'Gujarat', '388315', true);
-
-insert into farmer_kyc (farmer_id, document_type, document_number_token, document_number_masked, verification_status, verification_provider, verified_at) values
-  ('00000000-0000-4000-8000-000000000101', 'Aadhaar', 'tok_aad_7f3c', 'XXXX XXXX 4821', 'verified', 'DigiLocker (demo)', now()),
-  ('00000000-0000-4000-8000-000000000101', 'PAN', 'tok_pan_19be', 'XXXXX6413K', 'verified', 'NSDL PAN verification (demo)', now());
-
-insert into farmer_properties (farmer_id, ownership_type, survey_number, village, district, state, total_area, area_unit, land_use, verification_status) values
-  ('00000000-0000-4000-8000-000000000101', 'owned', '214/2', 'Bakrol', 'Anand', 'Gujarat', 1.2, 'acres', 'mixed', 'verified');
-
-insert into credit_profiles (farmer_id, bureau_name, credit_score, existing_loan_count, total_outstanding, retrieval_status, retrieved_at, mock_data) values
-  ('00000000-0000-4000-8000-000000000101', 'CIBIL', 742, 1, 18000, 'retrieved', now(), true);
-
-insert into lenders (lender_id, lender_name, lender_code, lender_type, integration_status) values
-  ('00000000-0000-4000-8000-000000000201', 'Gramin Partner Bank (demo)', 'GPB', 'Bank', 'mock'),
-  ('00000000-0000-4000-8000-000000000202', 'Sahakari Credit NBFC (demo)', 'SCN', 'NBFC', 'mock'),
-  ('00000000-0000-4000-8000-000000000203', 'Union Bank of India', 'UBI', 'Bank', 'inactive')
-  on conflict do nothing;
-
-insert into loan_products (lender_id, product_code, product_name, purpose, min_amount, max_amount, interest_rate, max_tenure_months, fee_pct) values
-  ('00000000-0000-4000-8000-000000000201', 'gpb', 'Cattle loan', 'cattle', 25000, 200000, 10.5, 36, 1),
-  ('00000000-0000-4000-8000-000000000202', 'scn', 'Feed and fodder credit', 'feed', 10000, 100000, 13, 24, 1.5)
-  on conflict do nothing;

@@ -6,7 +6,7 @@ import { useStore } from '@/lib/store';
 export default function Providers({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const onStorage = (e: StorageEvent) => {
-      if (e.key === 'doodh-setu-demo-v1') useStore.persist.rehydrate();
+      if (e.key === 'doodh-setu-ui-v2') useStore.persist.rehydrate();
     };
     window.addEventListener('storage', onStorage);
     return () => window.removeEventListener('storage', onStorage);

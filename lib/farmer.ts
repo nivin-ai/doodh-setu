@@ -1,4 +1,6 @@
-import { addDays, gauss, iso, monthKey, mulberry32, toDate } from './util';
+// Milk pricing and payment calculations for a farmer. Pure functions over the farmer's milk pours,
+// which come from the database (milk_transactions). No data is stored here.
+import { addDays, iso, monthKey, toDate } from './util';
 
 export type MilkType = 'buffalo' | 'cow';
 export interface Session {
@@ -19,35 +21,7 @@ export const BASE_RATE = 865; // Rs per kg fat (Amul Dairy, June 2025 public fig
 export const SNF_BONUS_PER_POINT = 6; // Rs per kg fat for every 0.1% SNF above 8.5
 const DENSITY = 1.03;
 
-// month index 0-11 -> yield factor (flush in winter, lean in summer)
-const SEASON = [1.12, 1.1, 1.0, 0.86, 0.8, 0.84, 0.92, 0.98, 1.0, 1.04, 1.1, 1.13];
-// buffalo SNF story: dips in Feb (fodder shortage), recovers in Mar-Apr
-const BUF_SNF: Record<string, number> = { '2027-01': 8.95, '2027-02': 8.72, '2027-03': 9.02, '2027-04': 9.1 };
 
-function generate(): Session[] {
-  const r = mulberry32(412);
-  const out: Session[] = [];
-  let d = toDate('2026-01-01');
-  const end = toDate('2027-06-30');
-  while (d <= end) {
-    const s = iso(d);
-    const m = d.getUTCMonth();
-    const f = SEASON[m];
-    const bSnf = BUF_SNF[monthKey(s)] ?? 9.0;
-    const lean = m >= 3 && m <= 5;
-    for (const session of ['AM', 'PM'] as const) {
-      const share = session === 'AM' ? 0.55 : 0.45;
-      const bL = 9.2 * f * share * (1 + gauss(r) * 0.05);
-      const cL = 6.0 * f * share * (1 + gauss(r) * 0.06);
-      out.push({ date: s, session, type: 'buffalo', litres: +bL.toFixed(1), fat: +(6.8 + (lean ? 0.2 : 0) + gauss(r) * 0.12).toFixed(1), snf: +(bSnf + gauss(r) * 0.06).toFixed(1) });
-      out.push({ date: s, session, type: 'cow', litres: +cL.toFixed(1), fat: +(4.2 + gauss(r) * 0.1).toFixed(1), snf: +(8.5 + gauss(r) * 0.05).toFixed(1) });
-    }
-    d = addDays(d, 1);
-  }
-  return out;
-}
-
-export const SESSIONS = generate();
 
 export const kgFat = (s: Session) => (s.litres * DENSITY * s.fat) / 100;
 export const snfBonus = (snf: number) => Math.max(0, Math.round((snf - 8.5) * 10)) * SNF_BONUS_PER_POINT;
@@ -61,9 +35,6 @@ export function amount(s: Session, p: Premium | null) {
   return kgFat(s) * (BASE_RATE + snfBonus(s.snf) + premiumFor(s, p));
 }
 
-export function sessionsUpTo(today: string) {
-  return SESSIONS.filter((s) => s.date <= today);
-}
 
 export interface MonthSummary {
   key: string;
@@ -79,8 +50,8 @@ export interface MonthSummary {
   total: number;
 }
 
-export function monthSummary(key: string, p: Premium | null, today: string): MonthSummary {
-  const ss = SESSIONS.filter((s) => monthKey(s.date) === key && s.date <= today);
+export function monthSummary(sessions: Session[], key: string, p: Premium | null, today: string): MonthSummary {
+  const ss = sessions.filter((s) => monthKey(s.date) === key && s.date <= today);
   const days = new Set(ss.map((s) => s.date)).size;
   let litres = 0, kf = 0, bkf = 0, base = 0, snf = 0, prem = 0, fatW = 0, bSnfW = 0, bL = 0;
   for (const s of ss) {
@@ -116,8 +87,8 @@ export function explainChange(prev: MonthSummary, cur: MonthSummary): Reason[] {
   return reasons.filter((r) => r.amount !== 0);
 }
 
-export function dayTotals(date: string, p: Premium | null) {
-  const ss = SESSIONS.filter((s) => s.date === date);
+export function dayTotals(sessions: Session[], date: string, p: Premium | null) {
+  const ss = sessions.filter((s) => s.date === date);
   const am = ss.filter((s) => s.session === 'AM');
   const pm = ss.filter((s) => s.session === 'PM');
   const sum = (a: Session[]) => a.reduce((x, s) => x + s.litres, 0);
@@ -141,18 +112,18 @@ export function monthKeysUpTo(today: string, n: number) {
 }
 
 // Estimated monthly value of a buffalo premium for this farmer, from her last 90 days
-export function worthToFarmer(today: string, rate: number) {
+export function worthToFarmer(sessions: Session[], today: string, rate: number) {
   const from = iso(addDays(toDate(today), -90));
-  const buf = SESSIONS.filter((s) => s.type === 'buffalo' && s.date > from && s.date <= today);
+  const buf = sessions.filter((s) => s.type === 'buffalo' && s.date > from && s.date <= today);
   const perDay = buf.reduce((x, s) => x + kgFat(s), 0) / 90;
   // lean-season yield is lower: apply April-June factor relative to recent months
   const leanAdj = 0.83 / 1.07;
   return Math.round((perDay * leanAdj * rate * 30) / 10) * 10;
 }
 
-export function last12MonthsIncome(today: string, p: Premium | null) {
+export function last12MonthsIncome(sessions: Session[], today: string, p: Premium | null) {
   const keys = monthKeysUpTo(today, 13).slice(0, 12);
   // exclude current incomplete month unless today is month end
   const complete = today.endsWith('-30') || today.endsWith('-31') ? monthKeysUpTo(today, 12) : keys;
-  return complete.map((k) => monthSummary(k, p, today));
+  return complete.map((k) => monthSummary(sessions, k, p, today));
 }
