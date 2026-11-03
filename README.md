@@ -1,4 +1,4 @@
-# Doodh Setu prototype (v0.3, database-first)
+# Doodh Setu prototype (v0.4, DairyFin multi-product)
 
 A working prototype of Doodh Setu, a demand-to-farmer intelligence platform for a dairy cooperative, built for the SPJIMR BDA assignment on the Amul case. All data is synthetic, calibrated to public Indian patterns. It is not real Amul data.
 
@@ -10,7 +10,8 @@ A working prototype of Doodh Setu, a demand-to-farmer intelligence platform for 
 | Farmer app | `/farmer` | A member farmer (Gujarati, Hindi, English, voice) |
 | Society dashboard | `/society` | Society secretary |
 | Planner console | `/planner` | Union planner and approver |
-| Lender desk (DairyFin) | `/lender` | Bank case officer |
+| Lender desk (DairyFin) | `/lender` | Bank case officer, or insurer reviewer |
+| Milk wallet | `/consumer` | City consumer (simulated prepaid subscription) |
 
 All business data is in Postgres (Supabase, or a local demo database when none is configured). Open the apps in separate tabs: an action in one shows up in the others within seconds. "Reset demo" on the home page clears what was done during a demo.
 
@@ -59,7 +60,7 @@ The planner console (`/planner`), society dashboard (`/society`) and lender desk
 
 The farmer app (`/farmer`) has no staff sign-in. In this prototype the browser is registered as the demo farmer's phone (`/api/farmer/session`); a real app would verify the member's mobile number with a one-time code. It can be added to a phone home screen (`public/farmer.webmanifest`).
 
-Demo accounts: planner / planner123, approver / approver123, secretary / society123, lender / lender123, admin / admin123. The admin can switch between all three modules and act as planner or approver.
+Demo accounts: planner / planner123, approver / approver123, secretary / society123, lender / lender123 (bank), insurer / insurer123 (insurer), admin / admin123. The admin can switch between all three modules and act as planner or approver.
 
 ## Voice (Gnani.ai)
 
@@ -115,6 +116,25 @@ npm run dev                  # open http://localhost:3000
 - `lib/ask.ts`: the farmer assistant answers only from approved content and the farmer's own records, in three languages.
 - `lib/i18n.ts`: farmer-facing text in Gujarati, Hindi and English. Starter translations: review with native speakers before field use.
 
+## DairyFin (finance, insurance and the milk wallet)
+
+DairyFin is a marketplace layer, not a lender or insurer. Every product, term and decision belongs to the provider, and every term in the demo catalogue is labelled demo/indicative (`loan_products.terms_verified = false`).
+
+- **Catalogue as data.** `loan_products` holds every product for farmers, societies and consumers: segment, type (loan, insurance, prepaid), category, description, benefits, eligibility rules, amount range, tenures, rate (empty = set by the provider), fees, required documents, application fields, data categories the consent covers, status, disclaimer, and for insurance coverage, exclusions and claim reasons. Demo products are in `supabase/seed/0004_dairyfin_catalogue.sql`; add or pause a product with SQL, no code change. No real insurer names or premiums are used.
+- **One application engine** (`lib/server/services/dairyfin.ts`, rules in `lib/dairyfin.ts`): segment, catalogue, product detail, indicative eligibility and documents, data-sharing notice, granular consent (choose each data category), dynamic form from `application_fields`, draft or submit, provider queue, information requests and replies, indicative offers the applicant accepts or declines, decisions and withdrawal. Statuses: draft, submitted, in review, more information needed, approved, declined, policy issued, withdrawn. The UI never says "approved" unless the provider set it.
+- **Farmer** (`/farmer`, Finance tab): loans and cattle insurance, tracker, documents checklist (uploads simulated), consents with withdrawal, policies with renewal requests, and claims (draft/submitted/under review/more information/approved/declined/settled/withdrawn).
+- **Society** (`/society`, Finance): bulk milk cooler, testing equipment and working capital. Only a representative marked `is_authorised_signatory` can submit, after confirming board authority; the consent is the society's own and covers society operating data (members, collection, quality).
+- **Providers** (`/lender`): queue tabs for farmer loans, society and insurance, filters by status and product, case view showing only consented categories, information requests, offers, internal notes, decision timestamps (`decided_at`) and audit. The insurer (`insurer / insurer123`) also approves, issues simulated policies, decides renewals and works the claims queue.
+- **Consumer wallet** (`/consumer`): subscribe, simulated top-up, simulated daily delivery, balance, history, pause, renew. No card, UPI or bank details are asked for and no money is held.
+- **Consent.** Each consent is for one applicant, one application, one recipient and one purpose, with a notice version. Withdrawing it takes effect at once: row-level security only lets a provider read data while `consent_status = 'granted'`, and the service refuses approvals, offers and policy issuance on withdrawn consent. Withdrawing an application also withdraws its consent.
+- **Safeguards.** The finance screens show the cooperative safeguards (membership, milk price and payments never depend on an application; the provider decides; no guaranteed approval).
+
+## What changed in v0.4
+
+- Migration `0004_dairyfin_products.sql` extends the existing finance tables (no parallel tables): product configuration on `loan_products`, society applicants, answers, offers and drafts on `loan_applications`, society consents, insurance policies and claims linked to applications and insurers, and new `consumers`, `wallet_subscriptions`, `wallet_transactions`, `insurance_claim_events`. It is additive and applied automatically on first use (`DB_AUTO_MIGRATE`).
+- New API routes: `/api/dairyfin/farmer`, `/api/dairyfin/society`, `/api/consumer` (+ `/api/consumer/session`); `/api/lender` gained offers, notes, information requests, policy issuance, renewals and claims.
+- Tests: `tests/dairyfin.test.mts` (catalogue, rules, full loan flow, consent withdrawal, society isolation, insurance policy and claim, wallet, reset).
+
 ## What changed in v0.3
 
 - Postgres is the source of truth: migrations, row-level security by role, typed repositories and services, a repeatable synthetic seed, and a local PGlite database when no `DATABASE_URL` is set.
@@ -129,4 +149,5 @@ npm run dev                  # open http://localhost:3000
 - Only the demo farmer has individual milk pours; other members show herd-based yields.
 - Translation of free-text local notes is manual (Gnani.ai provides voice, not translation).
 - The forecast and optimiser are simple, explainable models for demonstration.
-- Lender offers are demo offers, not real bank products.
+- Lender offers, rates, premiums and the wallet prices are demo figures, not real bank, insurer or Amul products. Documents and payments are simulated; nothing is uploaded or charged.
+- The new finance screens are in English; status labels follow the farmer's language where translations exist.

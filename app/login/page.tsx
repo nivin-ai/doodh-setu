@@ -11,7 +11,8 @@ const DEMO: { username: string; password: string; role: Role; opens: string }[] 
   { username: 'planner', password: 'planner123', role: 'planner', opens: 'Planner console' },
   { username: 'approver', password: 'approver123', role: 'approver', opens: 'Planner console (approvals)' },
   { username: 'secretary', password: 'society123', role: 'secretary', opens: 'Society dashboard' },
-  { username: 'lender', password: 'lender123', role: 'lender', opens: 'Lender desk' },
+  { username: 'lender', password: 'lender123', role: 'lender', opens: 'Lender desk (bank)' },
+  { username: 'insurer', password: 'insurer123', role: 'lender', opens: 'Lender desk (insurer: applications, policies, claims)' },
   { username: 'admin', password: 'admin123', role: 'admin', opens: 'All three modules' },
 ];
 

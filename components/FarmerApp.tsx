@@ -6,6 +6,8 @@ import { postJson, useResource } from '@/lib/client/api';
 import type { AppStatus, Consent, CreditRecord, FarmerData, KycRecord, LoanProduct, PropertyRecord } from '@/lib/types/api';
 import type { Session } from '@/lib/farmer';
 import { ErrorState, Loading } from './DataState';
+import { STATUS_TONE } from '@/lib/dairyfin';
+import FarmerFinance from './dairyfin/FarmerFinance';
 import { DEMO_DATES } from '@/lib/demo';
 import { LANGS, PHRASES, SIGNAL_NEED, SIGNAL_TITLE, signalMessage, t, type Lang } from '@/lib/i18n';
 import { dayTotals, explainChange, monthKeysUpTo, monthSummary, worthToFarmer, type MonthSummary } from '@/lib/farmer';
@@ -18,7 +20,7 @@ import { Chip, Count, PlayButton, Segmented, CHART } from './ui';
 import { IconBack, IconBank, IconCheck, IconChevron, IconChat, IconHome, IconNotice, IconPhone, IconRupee, IconSend, IconUser } from './icons';
 
 type Tab = 'home' | 'earnings' | 'signals' | 'finance' | 'ask';
-type Sub = null | 'signal' | 'why' | 'income' | 'afford' | 'products' | 'consent' | 'loanConsent' | 'apply' | 'tracker' | 'profile';
+type Sub = null | 'signal' | 'why' | 'income' | 'afford' | 'products' | 'tracker' | 'policies' | 'profile';
 
 // Farmer records from the database for the farmer currently signed in on this phone. FarmerApp
 // sets these on every render from the API response; they are render-time aliases, never stored.
@@ -53,7 +55,6 @@ type Loan = { amount: number; rate: number; tenure: number; expenses: number; ex
 const F = createContext<Ctx | null>(null);
 const useF = () => useContext(F) as Ctx;
 
-const STATUS_TONE: Record<AppStatus, 'primary' | 'good' | 'warn' | 'bad' | 'neutral'> = { submitted: 'primary', in_review: 'primary', more_info: 'warn', approved: 'good', declined: 'bad', withdrawn: 'neutral' };
 
 // Registers this browser as the demo farmer's phone (prototype; a real app verifies the mobile number)
 const registerDevice = () => fetch('/api/farmer/session', { method: 'POST' }).then(() => undefined);
@@ -379,11 +380,9 @@ function Finance() {
   const avg6 = Math.round(last12.slice(-6).reduce((x, m) => x + m.total, 0) / 6);
   if (sub === 'income') return <Income list={last12} />;
   if (sub === 'afford') return <Afford list={last12} />;
-  if (sub === 'products') return <Products />;
-  if (sub === 'consent') return <Consent />;
-  if (sub === 'loanConsent') return <LoanConsent />;
-  if (sub === 'apply') return <Apply />;
-  if (sub === 'tracker') return <Tracker />;
+  if (sub === 'products') return <FarmerFinance asOf={today} start="catalogue" />;
+  if (sub === 'tracker') return <FarmerFinance asOf={today} start="apps" />;
+  if (sub === 'policies') return <FarmerFinance asOf={today} start="policies" />;
   return (
     <div className="space-y-3">
       <div className="font-display text-[26px] font-bold leading-tight">{T('financeHome')}</div>
@@ -392,12 +391,12 @@ function Finance() {
         <div className="num mt-0.5 font-display text-[32px] font-bold leading-tight">{inr(avg6)}</div>
         <div className="text-xs text-muted">{fmtMonth(last12[last12.length - 6].key)} - {fmtMonth(last12[last12.length - 1].key)}</div>
       </div>
-      {[['income', T('incomeInsights')], ['afford', T('checkAfford')], ['products', T('exploreOptions')], ['tracker', T('trackApp')]].map(([k, l]) => (
+      {[['income', T('incomeInsights')], ['afford', T('checkAfford')], ['products', T('exploreOptions')], ['tracker', T('trackApp')], ['policies', 'Cattle insurance and claims']].map(([k, l]) => (
         <button key={k} onClick={() => setSub(k as Sub)} className="card rounded-sheet flex w-full items-center justify-between px-4 py-3.5 text-left font-semibold transition hover:border-primary/40 active:scale-[0.99]">
           <span>{l}</span>{k === 'tracker' && s.application ? <Chip tone={STATUS_TONE[s.application.status]}>{T('st_' + s.application.status)}</Chip> : <IconChevron className="text-muted" />}
         </button>
       ))}
-      <p className="text-xs text-muted">DairyFin is not a lender. Banks make their own decisions.</p>
+      <p className="text-xs text-muted">DairyFin is not a lender or insurer. Banks and insurers make their own decisions. Your membership, milk price and payments never depend on what you apply for.</p>
     </div>
   );
 }
@@ -460,163 +459,6 @@ function Afford({ list }: { list: MonthSummary[] }) {
       </div>
       {published ? <div className="rounded-xl border border-warn bg-warn-light p-3 text-sm text-warn">{T('notGuaranteed')}</div> : null}
       <button className="btn-primary w-full" onClick={() => setSub('products')}>{T('compare')}</button>
-    </div>
-  );
-}
-
-function Products() {
-  const { s, lang, T, today, premium, months, worth, published, go, setSub, flash, loan, setLoan, whyMonth, setWhyMonth, monthKeys, complete } = useF();
-  return (
-    <div className="space-y-3">
-      <div className="font-display text-[24px] font-bold leading-tight">{T('exploreOptions')}</div>
-      <SharedData />
-      {PRODUCTS_DEMO.map((p) => {
-        const amt = Math.min(Math.max(loan.amount, p.min), p.max), n = Math.min(loan.tenure, p.maxTenure);
-        const e = emiFor(amt, p.rate, n), fee = (amt * p.feePct) / 100;
-        return (
-          <div key={p.id} className="card rounded-sheet p-4">
-            <div className="flex items-start justify-between gap-2"><div><div className="font-bold">{p.lender}</div><div className="text-sm">{p.name}</div></div><Chip tone="warn">{T('demoOffer')}</Chip></div>
-            <div className="mt-2 grid grid-cols-2 gap-1 text-sm">
-              <span className="text-muted">{T('range')}</span><span>{inr(p.min)} - {inr(p.max)}</span>
-              <span className="text-muted">{T('rate')}</span><span>{p.rate}%, {p.maxTenure} {T('months')}</span>
-              <span className="text-muted">{T('fees')}</span><span>{p.feePct}% ({inr(fee)})</span>
-              <span className="text-muted">{T('emi')}</span><span className="font-bold">{inr(Math.round(e))} × {n}</span>
-              <span className="text-muted">{T('total')}</span><span>{inr(Math.round(e * n + fee))}</span>
-            </div>
-            <div className="mt-1 text-xs text-muted">{T('eligibility')}: {p.elig}, source date 31 Oct 2026 (demo)</div>
-            <button className="btn-secondary mt-3 w-full" onClick={() => { setLoan({ ...loan, product: p.id, amount: amt, tenure: n, rate: p.rate }); setSub('consent'); }}>{T('startApp')}</button>
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
-function Consent() {
-  const { s, lang, T, today, premium, months, worth, published, go, setSub, flash, loan, setLoan, whyMonth, setWhyMonth, monthKeys, complete } = useF();
-  const p = PRODUCTS_DEMO.find((x) => x.id === loan.product)!;
-  const [ok, setOk] = useState(false);
-  const rows: [string, string][] = [[T('sharedWith'), p.lender], [T('purpose'), T('purposeText')], [T('data'), T('dataText')], [T('period'), T('last12')], [T('keptFor'), T('keptText')], [T('youCan'), T('youCanText')]];
-  return (
-    <div className="space-y-3">
-      <div className="font-display text-[24px] font-bold leading-tight">{T('shareRecords')}</div>
-      <div className="flex items-center justify-between text-sm text-muted">{T('listenCarefully')}<PlayButton text={rows.map((r) => `${r[0]}: ${r[1]}`).join('. ')} lang={lang} /></div>
-      {rows.map(([k, v]) => <div key={k} className="card rounded-sheet px-4 py-2.5"><div className="label">{k}</div><div className="text-[15px]">{v}</div></div>)}
-      <label className="flex items-center gap-3 rounded-xl border border-line bg-fill p-3 font-bold"><input type="checkbox" className="h-5 w-5" checked={ok} onChange={(e) => setOk(e.target.checked)} />{T('allow')}</label>
-      <div className="grid grid-cols-2 gap-2">
-        <button className="btn-secondary !min-h-[52px]" onClick={() => setSub('products')}>{T('notNow')}</button>
-        <button className="btn-primary !min-h-[52px]" disabled={!ok} onClick={() => {
-          void s.grantConsent({ recipient: p.lender, purpose: 'Assess loan application', scope: 'Milk quantity and payments', period: 'Last 12 months', language: lang, method: 'digital', categories: ['milk_income'] }).then(() => setSub('loanConsent'));
-        }}>{T('continue')}</button>
-      </div>
-    </div>
-  );
-}
-
-// "When you apply, this is also shared" (Explore finance options)
-function SharedData() {
-  const { lang, T } = useF();
-  const F = fin(lang);
-  const items: [string, string, string][] = [
-    [F.kycTitle, F.kycText, KYC.map((k) => `${k.type} ${k.masked}`).join(' | ')],
-    [F.landTitle, F.landText, `${PROPERTY.record}, survey ${PROPERTY.survey}, ${PROPERTY.village}`],
-    [F.creditTitle, F.creditText, `${CREDIT.bureau} ${CREDIT.score}`],
-    [F.milkTitle, F.milkText, ''],
-  ];
-  return (
-    <div className="rounded-sheet border border-primary/25 bg-primary-light p-4">
-      <div className="flex items-start justify-between gap-2"><div className="font-bold text-primary">{F.alsoShared}</div><PlayButton text={[F.alsoShared, ...items.map((i) => `${i[0]}: ${i[1]}`)].join('. ')} lang={lang} /></div>
-      <div className="mt-0.5 text-[13px] text-muted">{F.alsoSharedSub}</div>
-      <ul className="mt-2 space-y-2">{items.map(([t1, d, v]) => (
-        <li key={t1} className="text-[14px]"><div className="font-semibold">{t1}</div><div className="text-muted">{d}</div>{v ? <div className="num mt-0.5 text-[12px]">{v} <Chip tone="warn">{T('simulated')}</Chip></div> : null}</li>
-      ))}</ul>
-    </div>
-  );
-}
-
-// DPDP consent for sharing farmer information for loan applications (consent_records)
-function LoanConsent() {
-  const { s, lang, T, setSub, loan } = useF();
-  const p = PRODUCTS_DEMO.find((x) => x.id === loan.product)!;
-  const F = fin(lang);
-  const [ticks, setTicks] = useState([false, false, false]);
-  const all = ticks.every(Boolean);
-  const spoken = [F.consentTitle, F.consentIntro, ...F.notice.map(([k, v]) => `${k}: ${v}`), ...F.statements].join('. ');
-  return (
-    <div className="space-y-3">
-      <div className="font-display text-[23px] font-bold leading-tight">{F.consentTitle}</div>
-      <div className="flex items-center justify-between gap-2 text-sm text-muted">{F.consentIntro}<PlayButton text={spoken} lang={lang} /></div>
-      <div className="card rounded-sheet p-4">
-        <div className="label">{F.noticeTitle}</div>
-        <dl className="mt-2 space-y-2 text-[14px]">{[[T('sharedWith'), p.lender] as [string, string], ...F.notice].map(([k, v]) => <div key={k}><dt className="font-semibold">{k}</dt><dd className="text-muted">{v}</dd></div>)}</dl>
-      </div>
-      {F.statements.map((st, i) => (
-        <label key={i} className={`flex gap-3 rounded-xl border p-3 text-[14px] leading-snug transition-colors ${ticks[i] ? 'border-primary bg-primary-light' : 'border-line bg-white'}`}>
-          <input type="checkbox" className="mt-0.5 h-5 w-5 shrink-0" checked={ticks[i]} onChange={(e) => setTicks(ticks.map((t0, j) => (j === i ? e.target.checked : t0)))} />{st}
-        </label>
-      ))}
-      <div className="text-xs text-muted">{F.version} {NOTICE_VERSION}</div>
-      {!all ? <div className="text-sm text-muted">{F.tickAll}</div> : null}
-      <div className="grid grid-cols-2 gap-2">
-        <button className="btn-secondary !min-h-[52px]" onClick={() => setSub('products')}>{T('notNow')}</button>
-        <button className="btn-primary !min-h-[52px]" disabled={!all} onClick={() => {
-          void s.grantConsent({ recipient: p.lender, purpose: 'Loan assessment, verification and processing', scope: 'Identity and KYC, land and property records, credit history, milk income', period: 'Until the application is decided, then as the law requires', noticeVersion: NOTICE_VERSION, categories: [...CATEGORIES], method: 'digital', language: lang, statements: 3 }).then(() => setSub('apply'));
-        }}>{F.agree}</button>
-      </div>
-    </div>
-  );
-}
-
-function Apply() {
-  const { s, lang, T, today, premium, months, worth, published, go, setSub, flash, loan, setLoan, whyMonth, setWhyMonth, monthKeys, complete } = useF();
-  const p = PRODUCTS_DEMO.find((x) => x.id === loan.product)!;
-  const F = fin(lang);
-  const lc = s.consents.find((x) => x.recipient === p.lender && x.status === 'active' && x.noticeVersion);
-  return (
-    <div className="space-y-3">
-      <div className="font-display text-[24px] font-bold leading-tight">{T('application')}</div>
-      <div className="card rounded-sheet p-4 text-[15px]"><div className="font-bold">{p.lender}</div><div>{p.name}</div>
-        <div className="mt-1">{inr(loan.amount)}, {loan.tenure} {T('months')}, {p.rate}%</div></div>
-      <div className="card rounded-sheet p-4"><div className="label">{T('documents')}</div>
-        <div className="mt-2 space-y-1.5 text-[15px]">
-          <div className="flex items-start gap-2"><IconCheck size={18} className="mt-0.5 shrink-0 text-good" /><span>{F.kycTitle}: {KYC.map((k) => `${k.type} ${k.masked}`).join(', ')}</span></div>
-          <div className="flex items-start gap-2"><IconCheck size={18} className="mt-0.5 shrink-0 text-good" /><span>{F.landTitle}: {PROPERTY.record}, survey {PROPERTY.survey}</span></div>
-          <div className="flex items-start gap-2"><IconCheck size={18} className="mt-0.5 shrink-0 text-good" /><span>{F.creditTitle}: {CREDIT.bureau} {CREDIT.score}</span></div>
-          <div className="flex items-center gap-2"><IconCheck size={18} className="text-good" />{T('bankAcc')}</div>
-          <div className="flex items-center gap-2 text-muted"><span className="mx-[3px] h-3 w-3 rounded-full border-2 border-line" />{T('cattleQuote')}</div>
-        </div>
-        {lc ? <div className="mt-2 text-xs text-muted">{F.version} {lc.noticeVersion}, consent {lc.code}</div> : null}</div>
-      <p className="text-sm text-muted">{T('bankDecides')}</p>
-      <button className="btn-primary w-full" onClick={() => {
-        const c = s.consents.find((x) => x.recipient === p.lender && x.status === 'active' && !x.noticeVersion);
-        void Promise.resolve(s.submitApplication({ product: p.name, lender: p.lender, amount: loan.amount, tenure: loan.tenure, rate: p.rate, consentId: c?.id ?? '', loanConsentId: lc?.id })).then(() => setSub('tracker'));
-      }}>{T('submit')}</button>
-    </div>
-  );
-}
-
-function Tracker() {
-  const { s, lang, T, today, premium, months, worth, published, go, setSub, flash, loan, setLoan, whyMonth, setWhyMonth, monthKeys, complete } = useF();
-  const a = s.application;
-  if (!a) return <div className="rounded-sheet border border-dashed border-line p-8 text-center text-muted">{T('noApp')}</div>;
-  return (
-    <div className="space-y-3">
-      <div className="card rounded-sheet p-4"><div className="flex items-center justify-between"><span className="font-bold">{T('reference')} {a.ref}</span><Chip tone={STATUS_TONE[a.status]}>{T('st_' + a.status)}</Chip></div>
-        <div className="text-sm">{a.lender}, {a.product}, {inr(a.amount)}</div></div>
-      {a.status === 'more_info' ? (
-        <div className="animate-pop rounded-sheet border border-marigold-deep/40 bg-warn-light p-4"><div className="font-bold text-warn">{T('docRequested')}</div><div className="text-sm">{T('cattleQuote')}</div>
-          <button className="btn-primary mt-2 w-full" onClick={() => { s.uploadDoc(); flash(T('uploaded')); }}>{T('upload')}</button></div>
-      ) : null}
-      <div className="card rounded-sheet p-4">
-        <div className="label">{T('status')}</div>
-        <ol className="mt-3 space-y-4 border-l-2 border-line pl-5">
-          {a.history.map((h, i) => (
-            <li key={i} className="relative animate-view-in"><span className={`absolute -left-[27px] top-1.5 h-3 w-3 rounded-full ring-4 ring-white ${i === a.history.length - 1 ? 'bg-primary' : 'bg-line'}`} /><div className="font-semibold">{T('st_' + h.status)}</div><div className="text-xs text-muted">{new Date(h.at).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })}</div><div className="text-sm">{h.note}</div></li>
-          ))}
-        </ol>
-      </div>
-      <p className="text-sm text-muted">{T('bankDecides')}</p>
-      {['submitted', 'in_review', 'more_info'].includes(a.status) ? <button className="btn-quiet w-full" onClick={() => s.setAppStatus('withdrawn', 'Withdrawn by farmer')}>{T('withdraw')}</button> : null}
     </div>
   );
 }

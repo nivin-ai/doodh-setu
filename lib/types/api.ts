@@ -4,7 +4,7 @@ import type { Lang } from '../i18n';
 import type { Session } from '../farmer';
 import type { City, ProductId, Channel } from '../demand';
 
-export type AppStatus = 'submitted' | 'in_review' | 'more_info' | 'approved' | 'declined' | 'withdrawn';
+export type AppStatus = 'draft' | 'submitted' | 'in_review' | 'more_info' | 'approved' | 'declined' | 'policy_issued' | 'withdrawn';
 export type ProgramStatus = 'submitted' | 'approved' | 'rejected' | 'concern' | 'published';
 export type SendSlot = 'evening' | 'morning' | 'both';
 export type SignalStatus = '-' | 'Interested' | 'Heard' | 'Not heard';
@@ -18,7 +18,7 @@ export interface Consent {
   noticeVersion?: string; categories: string[]; method?: 'digital' | 'assisted'; language?: Lang; statements?: number;
 }
 export interface SharingLog { id: string; consentCode: string; recipient: string; categories: string[]; purpose: string; status: 'initiated' | 'completed' | 'failed'; at: string }
-export type DocId = 'id' | 'bank' | 'quote' | 'kyc' | 'land' | 'credit';
+export type DocId = string; // configured per product (loan_products.required_documents)
 export interface Application {
   id: string; ref: string; product: string; lender: string; lenderId: string; amount: number; tenure: number; rate: number; status: AppStatus;
   history: { status: AppStatus; at: string; note: string }[];
@@ -92,10 +92,18 @@ export interface PlannerDataset {
 }
 export interface PlannerWorkflow { program: ProgramView | null; audit: AuditEvent[]; acceptedPlans: { month: string; kind: 'recommended' | 'adjusted'; acceptedBy: string }[] }
 
-export interface LenderCaseRow { id: string; ref: string; farmer: string; product: string; amount: number; status: AppStatus; updated: string; background: boolean }
-export interface LenderData { lender: { id: string; name: string }; cases: LenderCaseRow[]; products: LoanProduct[]; audit: AuditEvent[] }
+export interface LenderCaseRow { id: string; ref: string; farmer: string; product: string; productCode: string; amount: number; status: AppStatus; updated: string; background: boolean; applicantType: 'farmer' | 'society'; productType: 'loan' | 'insurance' | 'prepaid' }
+export interface LenderData {
+  lender: { id: string; name: string; kind: 'lender' | 'insurer' | 'platform' }; cases: LenderCaseRow[]; products: LoanProduct[]; audit: AuditEvent[];
+  catalogue: import('../dairyfin').FinProduct[]; policies: PolicyView[]; claims: ClaimView[];
+}
+export interface SocietyOps { code: string; name: string; village: string; members: number; avgDailyLitres: number; avgFat: number | null }
 export interface LenderCase {
-  application: Application;
+  application: Application & Partial<Omit<AppView, keyof Application>>;
+  society: SocietyOps | null;
+  animal: { type: string; breed: string; tag: string | null; health: string } | null;
+  product: import('../dairyfin').FinProduct | null;
+  notes: AuditEvent[];
   farmer: { name: string; code: string; society: string } | null;
   consent: Consent | null;
   kyc: KycRecord[] | null; property: PropertyRecord | null; credit: CreditRecord | null;
@@ -104,3 +112,30 @@ export interface LenderCase {
 }
 
 export interface DemoState { incentive: string; farmerInterested: boolean; application: string; openQueries: number; db: 'postgres' | 'pglite' }
+
+// ---------------------------------------------------------------- DairyFin (multi-product)
+export interface AppView extends Application {
+  productCode: string; productType: 'loan' | 'insurance' | 'prepaid'; applicantType: 'farmer' | 'society';
+  answers: Record<string, unknown>; offer: { amount?: number; rate?: number; tenure?: number; notes?: string } | null; offerStatus: 'pending' | 'accepted' | 'declined' | null;
+  insuredAnimal: { id: string; type: string; breed: string } | null; submittedAt: string | null;
+}
+export interface PolicyView { id: string; number: string; insurer: string; animal: { type: string; breed: string } | null; sumInsured: number | null; premium: number | null; start: string; end: string; status: string; renewal: string; simulated: boolean; productCode: string | null }
+export interface ClaimView { id: string; ref: string; policyNumber: string; reason: string; incidentDate: string; description: string; status: string; amountClaimed: number | null; history: { status: string; note: string; at: string }[]; farmer?: string }
+export interface FinanceFacts { membershipMonths?: number; regularSupply?: boolean; societyRegistered?: boolean; authorised?: boolean }
+
+export interface CattleRow { id: string; type: string; breed: string; tag: string | null; health: string; insured: boolean }
+export interface FarmerFinanceData {
+  products: import('../dairyfin').FinProduct[]; applications: AppView[]; consents: Consent[]; policies: PolicyView[]; claims: ClaimView[];
+  facts: FinanceFacts; cattle: CattleRow[]; safeguards: string[];
+}
+export interface SocietyFinanceData {
+  products: import('../dairyfin').FinProduct[]; applications: AppView[]; consents: Consent[]; operations: SocietyOps | null;
+  facts: FinanceFacts; signatory: { name: string; authorised: boolean }; safeguards: string[];
+}
+export interface WalletData {
+  consumer: { id: string; name: string; city: string };
+  product: import('../dairyfin').FinProduct | null;
+  subscription: { id: string; product: string; channel: string; plan: string; pricePerDay: number; status: string; renewsOn: string | null } | null;
+  transactions: { kind: 'topup' | 'purchase'; amount: number; description: string; at: string; simulated: boolean }[];
+  balance: number;
+}

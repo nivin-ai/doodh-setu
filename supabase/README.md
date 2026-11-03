@@ -7,8 +7,9 @@ Postgres is the source of truth for all business data. The schema is in `migrati
 | `0001_baseline.sql` | The original `schema.sql` (farmers, KYC, land, cattle, milk transactions, credit, lenders, loans, consent, data sharing, insurance). Its demo seed moved to the seed script. |
 | `0002_database_first.sql` | Societies, links and checks on the baseline tables, demand and planning tables, incentive programmes, member queries, staff accounts, audit and data-access logs. |
 | `0003_access_control.sql` | The `doodh_app` request role, scope helper functions, row-level security policies and the incentive status trigger (maker-checker). |
+| `0004_dairyfin_products.sql` | DairyFin: product configuration on `loan_products`, society applicants, drafts, answers and offers on `loan_applications`, society consents, insurance policies and claims linked to insurers, the consumer wallet tables, and their row-level security. Additive only. |
 
-All three are written to be re-runnable.
+All are written to be re-runnable. `supabase/seed/*.sql` holds idempotent demo reference data (the DairyFin catalogue, the demo insurer and wallet provider, the demo consumer and insurer account, ear tags for synthetic animals). It is applied after the seed, after a demo reset and, when the demo union exists, on first server start.
 
 ## Set up a Supabase project
 

@@ -4,12 +4,13 @@
 import type { Role } from './roles';
 export * from './roles';
 export interface Session {
-  u: string; n: string; r: Role | 'farmer'; exp: number;
+  u: string; n: string; r: Role | 'farmer' | 'consumer'; exp: number; k?: string | null; // k: consumer id
   c?: string | null; s?: string | null; l?: string | null; f?: string | null; // cooperative, society, lender, farmer ids
 }
 
 export const COOKIE = 'ds_session';
 export const FARMER_COOKIE = 'ds_farmer';
+export const CONSUMER_COOKIE = 'ds_consumer'; // prototype consumer wallet (demo consumer)
 export const MAX_AGE = 60 * 60 * 12; // 12 hours
 
 const enc = new TextEncoder();

@@ -6,7 +6,7 @@
 //     resetDemoWorkflow() only deletes workflow rows that belong to synthetic records.
 // Real records are never updated or deleted by this file.
 import { createHash, randomBytes, scryptSync } from 'node:crypto';
-import { insertMany, type Tx } from './db';
+import { applyDemoSeeds, insertMany, type Tx } from './db';
 import { generateDemand, GEN_PRODUCTS, EVENTS, HEATWAVE } from '../demo-data/demand';
 import { generateSessions } from '../demo-data/milk';
 import { generateSocieties } from '../demo-data/societies';
@@ -176,6 +176,7 @@ export async function seedDemoData(tx: Tx, opts: { log?: (m: string) => void } =
       [u.username, u.name, u.role, hashPassword(u.password), scope.cooperative, scope.society, scope.lender]);
   }
   log('Seed complete.');
+  await applyDemoSeeds(tx); // DairyFin catalogue, providers and demo accounts (supabase/seed)
   return true;
 }
 
@@ -199,6 +200,17 @@ async function seedBackgroundCases(tx: Tx) {
 // plans, audit) for synthetic records only, then restores the background lender cases.
 export async function resetDemoWorkflow(tx: Tx) {
   const synthFarmers = `select farmer_id from farmers where is_synthetic`;
+  const synthSocieties = `select society_id from societies where is_synthetic`;
+  // DairyFin: policies and claims, society applications and the demo consumer's wallet
+  await tx.query(`delete from insurance_claims where farmer_id in (${synthFarmers})`);
+  await tx.query(`delete from insurance_policies where farmer_id in (${synthFarmers}) and is_simulated`);
+  await tx.query(`delete from wallet_transactions where consumer_id in (select consumer_id from consumers where is_synthetic)`);
+  await tx.query(`delete from wallet_subscriptions where consumer_id in (select consumer_id from consumers where is_synthetic)`);
+  await tx.query(`update consent_records set application_id = null where society_id in (${synthSocieties})`);
+  await tx.query(`delete from data_access_logs where society_id in (${synthSocieties})`);
+  await tx.query(`delete from data_sharing_logs where society_id in (${synthSocieties})`);
+  await tx.query(`delete from loan_applications where applicant_type = 'society' and society_id in (${synthSocieties})`);
+  await tx.query(`delete from consent_records where society_id in (${synthSocieties})`);
   await tx.query(`update consent_records set application_id = null where farmer_id in (${synthFarmers})`);
   await tx.query(`delete from incentive_programs where cooperative_id in (select cooperative_id from cooperatives where is_synthetic)`);
   await tx.query(`delete from member_queries where farmer_id in (${synthFarmers})`);

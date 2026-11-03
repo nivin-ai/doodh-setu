@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { asSystem, dbMode, migrate } from '@/lib/server/db';
+import { applyDemoSeeds, asSystem, dbMode, migrate } from '@/lib/server/db';
 import { seedDemoData } from '@/lib/server/seed';
 
 export const runtime = 'nodejs';
@@ -22,7 +22,7 @@ export async function GET(req: NextRequest) {
   try {
     await migrate();
     log.push(`Migrations applied (${Date.now() - t0} ms)`);
-    const seeded = await asSystem((tx) => seedDemoData(tx, { log: (m) => log.push(m) }));
+    const seeded = await asSystem(async (tx) => { const r = await seedDemoData(tx, { log: (m) => log.push(m) }); if (!r) await applyDemoSeeds(tx); return r; });
     log.push(seeded ? `Demo data loaded (${Date.now() - t0} ms total)` : 'Demo data was already present');
     const counts = await asSystem((tx) => tx.query(`select (select count(*) from societies)::int societies, (select count(*) from farmers)::int farmers,
       (select count(*) from demand_daily)::int demand_rows, (select count(*) from milk_transactions)::int milk_rows, (select count(*) from app_users)::int staff_accounts`));

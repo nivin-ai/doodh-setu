@@ -7,7 +7,7 @@ import WalkingCow from '@/components/WalkingCow';
 import CowLogo from '@/components/CowLogo';
 import { signOut, useSession } from '@/components/session';
 import { HOME_FOR } from '@/lib/roles';
-import { IconBank, IconChevron, IconDrop, IconNotice } from '@/components/icons';
+import { IconBank, IconChevron, IconDrop, IconNotice, IconRupee } from '@/components/icons';
 import { useStore } from '@/lib/store';
 import { useResource } from '@/lib/client/api';
 import type { DemoState } from '@/lib/types/api';
@@ -17,7 +17,8 @@ const APPS = [
   { href: '/farmer', title: 'Farmer app', who: 'Farmer, member of Anand Milk Society', desc: 'Milk, earnings, society signals and DairyFin finance in Gujarati, Hindi and English, with an AI assistant that answers aloud. No sign-in; add it to your phone\'s home screen to use it like an app.' },
   { href: '/society', title: 'Society dashboard', who: 'Society secretary', desc: 'Receive approved targets, publish messages in three languages, track members and answer queries.' },
   { href: '/planner', title: 'Planner console', who: 'Planner and approver', desc: 'One screen: demand forecast, product mix, milk gap and incentive with approval, and results.' },
-  { href: '/lender', title: 'Lender desk (DairyFin)', who: 'Lender (case officer at a demo partner bank)', desc: 'Review consented income evidence, request documents and update application status.' },
+  { href: '/lender', title: 'Lender desk (DairyFin)', who: 'Lender (case officer at a demo partner bank)', desc: 'Bank and insurer desks: farmer, society and insurance queues, consented evidence, information requests, offers, policies and claims.' },
+  { href: '/consumer', title: 'Milk wallet (consumer)', who: 'City consumer', desc: 'Prepaid milk subscription with balance, history and renewal. Payments are simulated; no money is collected.' },
 ];
 
 const STEPS: { d: DemoDateKey; app: string; text: string }[] = [
@@ -28,8 +29,10 @@ const STEPS: { d: DemoDateKey; app: string; text: string }[] = [
   { d: 'mar', app: 'Planner', text: 'Sign in as the approver (or switch to Approver as the demo admin) and approve in section 3 (maker-checker).' },
   { d: 'mar', app: 'Society', text: 'Preview the message in three languages, add a local note, publish.' },
   { d: 'mar', app: 'Farmer', text: 'Hear the signal in Gujarati, see what it is worth, tap "I\'m interested". Ask the assistant a question.' },
-  { d: 'mar', app: 'Farmer', text: 'Finance: check affordability, compare demo offers, consent and apply.' },
-  { d: 'mar', app: 'Lender', text: 'Review the case and request a document; the farmer uploads it; mark approved.' },
+  { d: 'mar', app: 'Farmer', text: 'Finance: check affordability, explore loans and insurance, choose what to share, save a draft and submit.' },
+  { d: 'mar', app: 'Lender', text: 'Review the case, request a document, send an indicative offer; the farmer replies and accepts; approve.' },
+  { d: 'mar', app: 'Society', text: 'Finance: the authorised secretary applies for a bulk milk cooler with the society\'s consent.' },
+  { d: 'mar', app: 'Lender', text: 'Sign in as insurer: approve the cattle insurance, issue the policy; the farmer files a claim.' },
   { d: 'apr', app: 'Farmer', text: 'Switch demo date to 30 Apr: earnings show the premium and why the price changed.' },
   { d: 'apr', app: 'Planner', text: 'Section 4, Results: response and the share of value passed to farmers.' },
 ];
@@ -44,7 +47,7 @@ const FLOW = [
 const IconChart = ({ size = 20 }: { size?: number }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M4 20V10M10 20V4M16 20v-7M22 20H2" /></svg>
 );
-const APP_ICON: Record<string, (p: { size?: number }) => JSX.Element> = { '/farmer': IconDrop, '/society': IconNotice, '/planner': IconChart, '/lender': IconBank };
+const APP_ICON: Record<string, (p: { size?: number }) => JSX.Element> = { '/farmer': IconDrop, '/society': IconNotice, '/planner': IconChart, '/lender': IconBank, '/consumer': IconRupee };
 
 function Home() {
   const s = useStore();
@@ -119,7 +122,7 @@ function Home() {
               <Link key={a.href} href={a.href} target="_blank" className="group card flex items-start gap-4 p-5 transition hover:border-primary/40 hover:shadow-[0_8px_24px_-16px_rgba(11,92,173,.5)]">
                 <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary-light text-primary"><Icon size={20} /></span>
                 <div className="min-w-0 flex-1">
-                  <div className="flex flex-wrap items-center gap-2"><span className="text-[12px] font-semibold uppercase tracking-[0.1em] text-muted">{a.who}</span><span className={`rounded px-1.5 py-0.5 text-[11px] font-semibold ${a.href === '/farmer' ? 'bg-good-light text-good' : 'bg-primary-light text-primary'}`}>{a.href === '/farmer' ? 'Phone app' : 'Staff console'}</span></div>
+                  <div className="flex flex-wrap items-center gap-2"><span className="text-[12px] font-semibold uppercase tracking-[0.1em] text-muted">{a.who}</span><span className={`rounded px-1.5 py-0.5 text-[11px] font-semibold ${a.href === '/farmer' || a.href === '/consumer' ? 'bg-good-light text-good' : 'bg-primary-light text-primary'}`}>{a.href === '/farmer' ? 'Phone app' : a.href === '/consumer' ? 'Consumer, simulated' : 'Staff console'}</span></div>
                   <div className="mt-0.5 text-[17px] font-semibold">{a.title}</div>
                   <p className="mt-1.5 text-[14px] leading-relaxed text-muted">{a.desc}</p>
                 </div>

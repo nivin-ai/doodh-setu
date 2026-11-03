@@ -7,7 +7,7 @@
 // Every user request runs through withScope(): a transaction that switches to the low-privilege
 // role doodh_app and sets the caller's scope, so the row-level security policies in
 // supabase/migrations/0003_access_control.sql decide what the request can read and write.
-import { MIGRATIONS } from './migrations.sql';
+import { DEMO_SEEDS, MIGRATIONS } from './migrations.sql';
 import type { Role } from '../roles';
 
 export type Row = Record<string, unknown>;
@@ -17,7 +17,7 @@ export interface Tx {
 }
 interface Driver { kind: 'postgres' | 'pglite'; transaction<T>(fn: (tx: Tx) => Promise<T>): Promise<T> }
 
-export type DbRole = Exclude<Role, 'admin'> | 'farmer';
+export type DbRole = Exclude<Role, 'admin'> | 'farmer' | 'consumer';
 export interface Scope {
   role: DbRole;
   actor: string;
@@ -25,6 +25,7 @@ export interface Scope {
   societyId?: string | null;
   cooperativeId?: string | null;
   lenderId?: string | null;
+  consumerId?: string | null;
 }
 
 export class DbError extends Error {
@@ -38,13 +39,20 @@ async function postgresDriver(url: string): Promise<Driver> {
   const local = /localhost|127\.0\.0\.1/.test(url);
   // prepare: false works with Supabase's transaction pooler (port 6543)
   const sql = postgres(url, { prepare: false, max: 3, idle_timeout: 20, ssl: local ? false : 'require' });
-  return {
+  const driver: Driver = {
     kind: 'postgres',
     transaction: (fn) => sql.begin((t) => fn({
       query: async (text, params = []) => (await t.unsafe(text, params as never[])) as never,
       exec: async (text) => { await t.unsafe(text); },
     })) as never,
   };
+  // New migrations and demo reference data are applied on first use (idempotent, serialised by
+  // an advisory lock). Set DB_AUTO_MIGRATE=false to manage the schema only by hand.
+  if (process.env.DB_AUTO_MIGRATE !== 'false') {
+    await migrate(driver);
+    await driver.transaction(async (tx) => { if ((await tx.query('select 1 from cooperatives where code = $1', ['KDU-DEMO'])).length) await applyDemoSeeds(tx); });
+  }
+  return driver;
 }
 
 async function pgliteDriver(): Promise<Driver> {
@@ -60,7 +68,7 @@ async function pgliteDriver(): Promise<Driver> {
   };
   await migrate(driver);
   const { seedDemoData } = await import('./seed');
-  await driver.transaction((tx) => seedDemoData(tx));
+  await driver.transaction(async (tx) => { await seedDemoData(tx); await applyDemoSeeds(tx); });
   return driver;
 }
 
@@ -78,6 +86,7 @@ export function driver(): Promise<Driver> {
 export async function migrate(d?: Driver) {
   const drv = d ?? (await driver());
   await drv.transaction(async (tx) => {
+    await tx.query('select pg_advisory_xact_lock(4170412)'); // one migrator at a time
     await tx.query('create table if not exists schema_migrations (name text primary key, applied_at timestamptz not null default now())');
     const done = new Set((await tx.query<{ name: string }>('select name from schema_migrations')).map((r) => r.name));
     for (const m of MIGRATIONS) {
@@ -88,7 +97,12 @@ export async function migrate(d?: Driver) {
   });
 }
 
-const SETTINGS: [keyof Scope, string][] = [['role', 'role'], ['actor', 'actor'], ['farmerId', 'farmer_id'], ['societyId', 'society_id'], ['cooperativeId', 'cooperative_id'], ['lenderId', 'lender_id']];
+// Idempotent demo reference data (supabase/seed): the DairyFin catalogue, providers and demo accounts
+export async function applyDemoSeeds(tx: Tx) {
+  for (const s of DEMO_SEEDS) await tx.exec(s.sql);
+}
+
+const SETTINGS: [keyof Scope, string][] = [['role', 'role'], ['actor', 'actor'], ['farmerId', 'farmer_id'], ['societyId', 'society_id'], ['cooperativeId', 'cooperative_id'], ['lenderId', 'lender_id'], ['consumerId', 'consumer_id']];
 
 // Runs fn as the given user. Row-level security applies to everything fn does.
 export async function withScope<T>(scope: Scope, fn: (tx: Tx) => Promise<T>): Promise<T> {

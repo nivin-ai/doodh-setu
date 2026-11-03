@@ -1,6 +1,6 @@
 // Public demo helpers: aggregate status counts for the landing page and the demo reset.
 // They run with the server's own rights but return counts and statuses only, never records.
-import { asSystem, dbMode } from '../db';
+import { applyDemoSeeds, asSystem, dbMode } from '../db';
 import { isSeeded, resetDemoWorkflow, seedDemoData } from '../seed';
 import type { DemoState } from '../../types/api';
 
@@ -21,5 +21,6 @@ export async function resetDemo() {
   await asSystem(async (tx) => {
     if (!(await isSeeded(tx))) { await seedDemoData(tx); return; }
     await resetDemoWorkflow(tx);
+    await applyDemoSeeds(tx);
   });
 }

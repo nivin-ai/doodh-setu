@@ -176,7 +176,7 @@ export async function markQueriesSeen(tx: Tx, farmerId: string) {
 }
 
 // ---------------------------------------------------------------- finance
-function toConsent(r: Record<string, unknown>): Consent {
+export function toConsent(r: Record<string, unknown>): Consent {
   const cats = typeof r.collection_categories === 'string' ? JSON.parse(r.collection_categories) : r.collection_categories;
   return {
     id: String(r.consent_id), code: String(r.consent_code ?? ''), recipient: String(r.recipient_name ?? ''), lenderId: (r.lender_id as string) ?? null,
@@ -186,7 +186,7 @@ function toConsent(r: Record<string, unknown>): Consent {
     language: (r.language as Lang) ?? undefined, statements: num(r.statements_confirmed) ?? undefined,
   };
 }
-const CONSENT_COLS = `consent_id::text consent_id, consent_code, recipient_name, lender_id::text lender_id, consent_purpose, scope, period, granted_at, consent_status,
+export const CONSENT_COLS = `consent_id::text consent_id, consent_code, recipient_name, lender_id::text lender_id, consent_purpose, scope, period, granted_at, consent_status,
   withdrawn_at, consent_notice_version, collection_categories, consent_method, language, statements_confirmed`;
 export async function listConsents(tx: Tx, farmerId: string) {
   return (await tx.query<Record<string, unknown>>(`select ${CONSENT_COLS} from consent_records where farmer_id = $1 order by granted_at desc`, [farmerId])).map(toConsent);
@@ -292,9 +292,10 @@ export async function logSharing(tx: Tx, s: { farmerId: string; applicationId: s
 }
 export async function listLenderCases(tx: Tx) {
   return tx.query<Record<string, unknown>>(`select a.application_id::text id, a.application_reference ref, a.loan_purpose product, a.requested_amount amount, a.application_status status,
-      a.last_updated_at, a.is_synthetic, f.farmer_code, s.name society
-    from loan_applications a left join farmers f on f.farmer_id = a.farmer_id left join societies s on s.society_id = f.society_id
-    order by a.is_synthetic, a.submitted_at desc limit 200`);
+      a.last_updated_at, a.is_synthetic, a.applicant_type, coalesce(p.product_type, 'loan') product_type, p.product_code, f.farmer_code, s.name society, so.name applicant_society
+    from loan_applications a left join loan_products p on p.loan_product_id = a.loan_product_id
+    left join farmers f on f.farmer_id = a.farmer_id left join societies s on s.society_id = f.society_id left join societies so on so.society_id = a.society_id
+    order by a.is_synthetic, a.submitted_at desc nulls last limit 200`);
 }
 export async function logDataAccess(tx: Tx, a: { accessor: string; farmerId: string; lenderId: string; applicationId: string; categories: string[]; purpose: string }) {
   await tx.query(`insert into data_access_logs (accessor, accessor_role, farmer_id, lender_id, application_id, categories, purpose) values ($1, 'lender', $2, $3, $4, $5::text::jsonb, $6)`,

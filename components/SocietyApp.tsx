@@ -8,6 +8,7 @@ import { fmtDate, fmtMonth, inr, num } from '@/lib/util';
 import { postJson, useResource } from '@/lib/client/api';
 import type { MemberRow, SendSlot, SocietyData } from '@/lib/types/api';
 import { Empty, ErrorState, Loading } from './DataState';
+import SocietyFinance from './dairyfin/SocietyFinance';
 import { CHART, Chip, ConsoleShell, Count, Note, PageTitle, PlayButton, Segmented, Stat } from './ui';
 import { IconCheck, IconChevron } from './icons';
 
@@ -35,13 +36,13 @@ export default function SocietyApp() {
   const openQ = d ? d.queries.filter((q) => q.status === 'open').length : 0;
   const menu = [
     { id: 'overview', label: 'Overview' }, { id: 'targets', label: 'Targets', badge: pendingTarget },
-    { id: 'members', label: 'Members' }, { id: 'queries', label: 'Queries', badge: openQ }, { id: 'reports', label: 'Reports' },
+    { id: 'members', label: 'Members' }, { id: 'queries', label: 'Queries', badge: openQ }, { id: 'finance', label: 'Finance' }, { id: 'reports', label: 'Reports' },
   ];
   return (
     <ConsoleShell title="Society dashboard" place={d?.society.name} menu={menu} active={view} onSelect={setView}>
       {!d ? (r.error ? <ErrorState error={r.error} onRetry={r.refresh} /> : <Loading label="Loading society records..." />) : (
         <SocietyCtx.Provider value={{ d, asOf, act, busy, err }}>
-          {view === 'overview' ? <Overview go={setView} /> : view === 'targets' ? <Targets /> : view === 'members' ? <Members /> : view === 'queries' ? <Queries /> : <Reports />}
+          {view === 'overview' ? <Overview go={setView} /> : view === 'targets' ? <Targets /> : view === 'members' ? <Members /> : view === 'queries' ? <Queries /> : view === 'finance' ? <SocietyFinance asOf={asOf} /> : <Reports />}
         </SocietyCtx.Provider>
       )}
     </ConsoleShell>
