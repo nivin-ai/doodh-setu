@@ -22,9 +22,9 @@ function ramp(stops: string[], t: number) {
   const a = hex(stops[i]), b = hex(stops[i + 1]), k = x - i;
   return `rgb(${a.map((v, j) => Math.round(v + (b[j] - v) * k)).join(',')})`;
 }
-const RISK = ['#C9D0EA', '#F4B400', '#E0662E', '#B23A2E', '#7E1F17'];
-const GROWTH = ['#FFF3CF', '#F4B400', '#E0662E', '#B23A2E'];
-const VOLUME = ['#E9ECF8', '#9AA6DA', '#26347F', '#141C47'];
+const RISK = ['#BCD5EE', '#F2BE2C', '#E0662E', '#B23A2E', '#7E1F17'];
+const GROWTH = ['#FFF5D6', '#F2BE2C', '#E0662E', '#B23A2E'];
+const VOLUME = ['#E6F0FA', '#7FB0E0', '#0B5CAD', '#06315C'];
 
 const riskT = (r: number) => (r - 0.9) / 0.3; // 0.90 -> 0, 1.20 -> 1
 const growthT = (g: number) => (g - 0.05) / 0.3;
@@ -90,7 +90,7 @@ export default function DemandMap() {
           </div>
           <div className="relative h-[460px]">
             <ZoneMap city={city} cells={cells} selected={sel} onSelect={setSel} />
-            <div key={week} className="pointer-events-none absolute right-3 top-3 z-[500] animate-pop rounded-xl bg-white/95 px-3 py-2 shadow-[0_4px_14px_-6px_rgba(23,26,38,.35)]">
+            <div key={week} className="pointer-events-none absolute right-3 top-3 z-[500] animate-pop rounded-xl bg-white/95 px-3 py-2 shadow-[0_4px_14px_-6px_rgba(18,32,48,.35)]">
               <div className="text-[12px] text-muted">Week of</div>
               <div className="font-bold leading-tight">{fmtDate(week)}</div>
               {hot ? <div className="mt-1"><Chip tone="marigold">Heatwave outlook</Chip></div> : null}
@@ -106,7 +106,7 @@ export default function DemandMap() {
               <div className="relative flex-1 pt-4">
                 <div className="absolute top-0 h-2.5 rounded-full bg-marigold-soft" style={{ left: `calc(${(heatFrom / (WEEKS.length - 1)) * 100}% - 6px)`, width: `calc(${((heatTo - heatFrom) / (WEEKS.length - 1)) * 100}% + 12px)` }} />
                 <span className="absolute -top-0.5 text-[11px] font-semibold text-marigold-deep" style={{ left: `${(heatFrom / (WEEKS.length - 1)) * 100}%` }}>Heatwave</span>
-                <input type="range" aria-label="Week" min={0} max={WEEKS.length - 1} value={w} onChange={(e) => { setPlaying(false); setW(Number(e.target.value)); }} className="w-full accent-[#26347F]" />
+                <input type="range" aria-label="Week" min={0} max={WEEKS.length - 1} value={w} onChange={(e) => { setPlaying(false); setW(Number(e.target.value)); }} className="w-full accent-[#0B5CAD]" />
                 <div className="flex justify-between text-[11px] text-muted"><span>{fmtDate(WEEKS[0])}</span><span>{fmtDate(WEEKS[WEEKS.length - 1])}</span></div>
               </div>
             </div>
@@ -151,7 +151,7 @@ export default function DemandMap() {
             <div className="card p-4">
               <div className="font-bold">Act first</div>
               <p className="text-[13px] text-muted">Highest stockout risk this week. Click a zone on the map for its detail.</p>
-              <ol className="mt-2 divide-y divide-[#E8EBF1]">
+              <ol className="mt-2 divide-y divide-[#E6EDF5]">
                 {top.map(({ z, d }) => (
                   <li key={z.id}>
                     <button onClick={() => setSel(z.id)} className="flex w-full items-center gap-3 py-2 text-left transition-colors hover:text-primary">

@@ -1,7 +1,8 @@
 'use client';
 // Planner console: one screen (FRD P-01). Sections follow the planning story:
 // data health -> demand -> product mix -> milk gap and incentive (with approval) -> results.
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { useSession } from './session';
 import {
   Area, Bar, BarChart, CartesianGrid, Cell, ComposedChart, LabelList, Legend, Line, ReferenceArea, ResponsiveContainer, Tooltip, XAxis, YAxis,
 } from 'recharts';
@@ -15,18 +16,21 @@ import { IconCheck } from './icons';
 import DemandMap from './DemandMap';
 
 const pill = (on: boolean) => `rounded-full border px-3 py-1 text-sm transition-colors ${on ? 'border-primary bg-primary font-semibold text-white' : 'border-line bg-white hover:bg-alt'}`;
-const axis = { tickLine: false, axisLine: false, fontSize: 11, stroke: '#5B6275' } as const;
+const axis = { tickLine: false, axisLine: false, fontSize: 11, stroke: '#55657A' } as const;
 const ASOF = DEMO_DATES['mar'].date;
 
 const USERS = { planner: 'Planner', approver: 'Approver' };
 
 export default function PlannerApp() {
   const s = useStore();
+  const { user } = useSession();
+  // The signed-in role decides who can submit (planner) and who can approve (approver).
+  useEffect(() => { if (user && (user.role === 'planner' || user.role === 'approver') && s.plannerUser !== user.role) s.set({ plannerUser: user.role }); }, [user?.role]); // eslint-disable-line react-hooks/exhaustive-deps
   return (
     <ConsoleShell title="Planner console" place={UNION} menu={[]} active="planner" onSelect={() => undefined}
-      right={<label className="flex items-center gap-2 text-white/75">Signed in as
-        <select className="rounded-full border-0 bg-white/10 px-3 py-1 text-white outline-none [&>option]:text-ink" value={s.plannerUser === 'approver' ? 'approver' : 'planner'} onChange={(e) => s.set({ plannerUser: e.target.value as 'planner' | 'approver' })}>
-          <option value="planner">{USERS.planner}</option><option value="approver">{USERS.approver}</option></select></label>}>
+      right={user?.role === 'admin' ? <label className="flex items-center gap-2 text-white/75">Acting as
+        <select className="rounded-lg border-0 bg-white/10 px-2.5 py-1 text-white outline-none [&>option]:text-ink" value={s.plannerUser === 'approver' ? 'approver' : 'planner'} onChange={(e) => s.set({ plannerUser: e.target.value as 'planner' | 'approver' })}>
+          <option value="planner">{USERS.planner}</option><option value="approver">{USERS.approver}</option></select></label> : null}>
       <Overview />
       <div className="mt-6 grid gap-5 xl:grid-cols-2">
         <Section n={1} title="Demand forecast" sub="What will sell, where and when"><DemandCard /></Section>
@@ -124,9 +128,9 @@ function DemandCard() {
           <CartesianGrid stroke={CHART.grid} vertical={false} />
           <XAxis dataKey="label" interval={20} {...axis} />
           <YAxis {...axis} tickFormatter={(v: number) => `${Math.round(v / 1000)}k`} />
-          <ReferenceArea x1={HEATWAVE.from.slice(5)} x2={HEATWAVE.to.slice(5)} fill="#FFF3CF" label={{ value: 'Heatwave', position: 'insideTop', fontSize: 11, fill: CHART.marigoldDeep }} />
+          <ReferenceArea x1={HEATWAVE.from.slice(5)} x2={HEATWAVE.to.slice(5)} fill="#FFF5D6" label={{ value: 'Heatwave', position: 'insideTop', fontSize: 11, fill: CHART.marigoldDeep }} />
           <Area dataKey="range" stroke="none" fill={CHART.indigoSoft} fillOpacity={0.55} name="80% range" />
-          <Line dataKey="actual" stroke="#171A26" dot={false} strokeWidth={1.5} name="Actual" />
+          <Line dataKey="actual" stroke="#122030" dot={false} strokeWidth={1.5} name="Actual" />
           <Line dataKey="forecast" stroke={CHART.indigo} dot={false} strokeWidth={2.5} name="Forecast" />
           <Tooltip formatter={(v: number | number[], n: string) => [Array.isArray(v) ? `${num(v[0])} - ${num(v[1])}` : num(v), n]} />
           <Legend iconType="circle" />
@@ -172,7 +176,7 @@ function MixCard() {
       {adjusted ? <div className="mt-2 text-xs text-muted">Recommended plan would add {inrShort((rec.totalValue - cur.totalValue) * days)} this month; your plan is {inrShort(Math.abs(shown.totalValue - rec.totalValue) * days)} {shown.totalValue >= rec.totalValue ? 'above' : 'below'} it.</div> : null}
       <div className="mt-3 h-60"><ResponsiveContainer><BarChart data={chart} layout="vertical" margin={{ left: 10, right: 30 }}>
         <CartesianGrid stroke={CHART.grid} horizontal={false} /><XAxis type="number" {...axis} /><YAxis type="category" dataKey="name" {...axis} width={120} />
-        <Tooltip cursor={{ fill: '#F3F5F9' }} formatter={(v: number) => `${num(v)}k L/day`} /><Legend iconType="circle" />
+        <Tooltip cursor={{ fill: '#F4F8FC' }} formatter={(v: number) => `${num(v)}k L/day`} /><Legend iconType="circle" />
         <Bar dataKey="current" name="Current plan" fill={CHART.grey} radius={[0, 4, 4, 0]} />
         <Bar dataKey="planned" name={planName} fill={adjusted ? CHART.marigold : CHART.indigo} radius={[0, 4, 4, 0]}><LabelList dataKey="planned" position="right" fontSize={10} /></Bar>
       </BarChart></ResponsiveContainer></div>
@@ -195,7 +199,7 @@ function MixCard() {
             return (
               <div key={id} className="grid grid-cols-[110px_1fr_82px] items-center gap-3 py-1 text-sm sm:grid-cols-[140px_1fr_90px_120px]">
                 <span>{r.name}</span>
-                <input type="range" aria-label={`${r.name} litres per day`} min={0} max={max} step={500} value={Math.min(max, Math.round(r.litres))} onChange={(e) => setL(id, Number(e.target.value))} className="w-full accent-[#26347F]" />
+                <input type="range" aria-label={`${r.name} litres per day`} min={0} max={max} step={500} value={Math.min(max, Math.round(r.litres))} onChange={(e) => setL(id, Number(e.target.value))} className="w-full accent-[#0B5CAD]" />
                 <span className="num text-right font-bold">{num(Math.round(r.litres / 1000))}k L</span>
                 <span className="hidden text-xs text-muted sm:inline">of {num(Math.round(max / 1000))}k demand, {pct(m.buffaloShare)} buffalo{Math.abs(r.litres - recL) > 499 ? `, rec. ${num(Math.round(recL / 1000))}k` : ''}</span>
               </div>
@@ -288,7 +292,7 @@ function SocietyPicker({ ids, locked, onChange }: { ids: number[]; locked: boole
           </div>
           <div className="mt-2 flex items-center gap-3 text-xs text-muted">
             <span className="shrink-0">Min buffalo milk</span>
-            <input type="range" aria-label="Minimum buffalo milk per day" min={0} max={maxL} step={50} value={minL} onChange={(e) => setMinL(Number(e.target.value))} className="w-full accent-[#26347F]" />
+            <input type="range" aria-label="Minimum buffalo milk per day" min={0} max={maxL} step={50} value={minL} onChange={(e) => setMinL(Number(e.target.value))} className="w-full accent-[#0B5CAD]" />
             <span className="num w-20 shrink-0 text-right">{num(minL)} L/day</span>
           </div>
           <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
@@ -298,8 +302,8 @@ function SocietyPicker({ ids, locked, onChange }: { ids: number[]; locked: boole
           </div>
           <div className="mt-1 max-h-64 overflow-y-auto rounded-lg border border-line">
             {shown.map((x) => (
-              <label key={x.id} className={`flex cursor-pointer items-center gap-2 border-b border-[#E8EBF1] px-3 py-1.5 text-sm last:border-0 ${sel.has(x.id) ? 'bg-primary-light/40' : ''}`}>
-                <input type="checkbox" disabled={locked} checked={sel.has(x.id)} onChange={() => toggle(x.id)} className="accent-[#26347F]" />
+              <label key={x.id} className={`flex cursor-pointer items-center gap-2 border-b border-[#E6EDF5] px-3 py-1.5 text-sm last:border-0 ${sel.has(x.id) ? 'bg-primary-light/40' : ''}`}>
+                <input type="checkbox" disabled={locked} checked={sel.has(x.id)} onChange={() => toggle(x.id)} className="accent-[#0B5CAD]" />
                 <span className="min-w-0 flex-1 truncate">{x.name}</span>
                 <span className="hidden text-xs text-muted sm:inline">{x.region}, {x.size}, {num(x.members)} members</span>
                 <span className="num w-20 text-right text-xs">{num(x.buffaloLitres)} L</span>
@@ -327,7 +331,7 @@ function GapIncentive() {
       <div>
         <div className="label">Buffalo milk needed vs expected (thousand L/day)</div>
         <div className="mt-1 h-52"><ResponsiveContainer><BarChart data={gapData} margin={{ top: 20, right: 6, left: -16, bottom: 0 }}>
-          <CartesianGrid stroke={CHART.grid} vertical={false} /><XAxis dataKey="month" {...axis} fontSize={12} /><YAxis {...axis} /><Tooltip cursor={{ fill: '#F3F5F9' }} formatter={(v: number) => `${num(v)}k L/day`} /><Legend iconType="circle" />
+          <CartesianGrid stroke={CHART.grid} vertical={false} /><XAxis dataKey="month" {...axis} fontSize={12} /><YAxis {...axis} /><Tooltip cursor={{ fill: '#F4F8FC' }} formatter={(v: number) => `${num(v)}k L/day`} /><Legend iconType="circle" />
           <Bar dataKey="req" name="Needed" fill={CHART.marigold} radius={[6, 6, 0, 0]}><LabelList dataKey="req" position="top" fontSize={11} /></Bar>
           <Bar dataKey="exp" name="Expected" fill={CHART.indigo} radius={[6, 6, 0, 0]}><LabelList dataKey="exp" position="top" fontSize={11} /></Bar>
         </BarChart></ResponsiveContainer></div>
@@ -340,7 +344,7 @@ function GapIncentive() {
           {inc.status !== 'none' ? <Chip tone={inc.status === 'published' || inc.status === 'approved' ? 'good' : inc.status === 'rejected' ? 'bad' : 'primary'}>{inc.status}</Chip> : null}</div>
         <div className="mt-2 flex items-center gap-4">
           <div className="num shrink-0 whitespace-nowrap font-display text-[28px] font-bold leading-tight text-primary">₹<Count value={inc.rate} format={(n) => String(Math.round(n))} /><span className="text-[14px] font-semibold text-muted"> per kg fat</span></div>
-          <input type="range" aria-label="Amount per kg fat" min={0} max={80} step={1} value={inc.rate} disabled={locked} onChange={(e) => s.setIncentive({ rate: Number(e.target.value) })} className="w-full accent-[#26347F]" />
+          <input type="range" aria-label="Amount per kg fat" min={0} max={80} step={1} value={inc.rate} disabled={locked} onChange={(e) => s.setIncentive({ rate: Number(e.target.value) })} className="w-full accent-[#0B5CAD]" />
         </div>
         <SocietyPicker ids={inc.ids} locked={locked} onChange={(ids) => s.setIncentive({ ids })} />
         <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
@@ -371,7 +375,7 @@ function GapIncentive() {
             <button className="btn-primary" disabled={!imp.capOk || (!imp.fairOk && !why.trim()) || s.plannerUser !== 'planner'}
               onClick={() => { s.setIncentive({ status: 'submitted', submittedBy: USERS.planner, reason: why }); s.log(USERS.planner, `Submitted lean-season premium ₹${inc.rate}/kg fat for ${imp.societies} societies`); }}>Submit for approval</button>
           ) : null}
-          {s.plannerUser !== 'planner' && !locked ? <span className="text-sm text-muted">Switch to the planner (top right) to submit.</span> : null}
+          {s.plannerUser !== 'planner' && !locked ? <span className="text-sm text-muted">Only the planner can submit. Sign in as the planner to submit.</span> : null}
         </div>
         <Approval />
       </div>
@@ -405,7 +409,7 @@ function Approval() {
           <input className="input max-w-[220px]" placeholder="Reason (to reject)" value={reason} onChange={(e) => setReason(e.target.value)} />
           <button className="btn-quiet" disabled={!reason.trim()} onClick={() => { s.setIncentive({ status: 'rejected', reason }); s.log(USERS.approver, `Rejected: ${reason}`); }}>Reject</button>
         </div>
-      ) : <div className="mt-1 text-muted">Switch to {USERS.approver} (top right) to decide.</div>}
+      ) : <div className="mt-1 text-muted">Only the approver can decide. Sign in as the approver to approve or reject.</div>}
     </div>
   );
 }
@@ -446,7 +450,7 @@ function ResultsCard() {
         </>
       ) : null}
       <Details label="audit log">
-        <ul className="max-h-56 divide-y divide-[#E8EBF1] overflow-auto text-[13px]">{s.audit.length ? s.audit.map((a, i) => <li key={i} className="grid grid-cols-[140px_1fr] gap-3 py-1.5"><span className="num text-muted">{new Date(a.at).toLocaleString('en-IN')}</span><span><b className="font-semibold">{a.actor}</b>: {a.action}</span></li>) : <li className="py-1.5 text-muted">No actions yet.</li>}</ul>
+        <ul className="max-h-56 divide-y divide-[#E6EDF5] overflow-auto text-[13px]">{s.audit.length ? s.audit.map((a, i) => <li key={i} className="grid grid-cols-[140px_1fr] gap-3 py-1.5"><span className="num text-muted">{new Date(a.at).toLocaleString('en-IN')}</span><span><b className="font-semibold">{a.actor}</b>: {a.action}</span></li>) : <li className="py-1.5 text-muted">No actions yet.</li>}</ul>
       </Details>
     </div>
   );

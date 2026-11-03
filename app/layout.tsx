@@ -6,7 +6,7 @@ export const metadata: Metadata = {
   title: 'Doodh Setu prototype',
   description: 'Demand-to-farmer intelligence platform for a dairy cooperative (student prototype, synthetic data).',
 };
-export const viewport: Viewport = { width: 'device-width', initialScale: 1, themeColor: '#1B2560' };
+export const viewport: Viewport = { width: 'device-width', initialScale: 1, themeColor: '#084785' };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (

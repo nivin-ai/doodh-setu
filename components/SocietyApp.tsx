@@ -31,7 +31,7 @@ export default function SocietyApp() {
     { id: 'members', label: 'Members' }, { id: 'queries', label: 'Queries', badge: openQ }, { id: 'reports', label: 'Reports' },
   ];
   return (
-    <ConsoleShell title="Society dashboard" place={FARMER.society} menu={menu} active={view} onSelect={setView} right={<span className="rounded-full bg-white/10 px-3 py-1">Society secretary</span>}>
+    <ConsoleShell title="Society dashboard" place={FARMER.society} menu={menu} active={view} onSelect={setView}>
       {view === 'overview' ? <Overview go={setView} /> : view === 'targets' ? <Targets /> : view === 'members' ? <Members /> : view === 'queries' ? <Queries /> : <Reports />}
     </ConsoleShell>
   );
@@ -236,7 +236,7 @@ function Reports() {
     <div>
       <PageTitle title="Reports" />
       <div className="card p-5"><div className="font-bold">Buffalo milk collection (litres per day, monthly average)</div>
-        <div className="mt-3 h-64"><ResponsiveContainer><BarChart data={apr ? data : data.slice(0, 3)}><CartesianGrid vertical={false} stroke={CHART.grid} /><XAxis dataKey="m" tickLine={false} axisLine={false} /><YAxis tickLine={false} axisLine={false} /><Tooltip cursor={{ fill: '#F3F5F9' }} /><Legend iconType="circle" />
+        <div className="mt-3 h-64"><ResponsiveContainer><BarChart data={apr ? data : data.slice(0, 3)}><CartesianGrid vertical={false} stroke={CHART.grid} /><XAxis dataKey="m" tickLine={false} axisLine={false} /><YAxis tickLine={false} axisLine={false} /><Tooltip cursor={{ fill: '#F4F8FC' }} /><Legend iconType="circle" />
           <Bar dataKey="buffalo" name="Collected" fill={CHART.indigo} radius={[6, 6, 0, 0]} /><Bar dataKey="target" name="Target" fill={CHART.marigold} radius={[6, 6, 0, 0]} /></BarChart></ResponsiveContainer></div>
         <Note>Demo figures. Lean-season fall is expected; the target is set against last year&apos;s April.</Note>
       </div>

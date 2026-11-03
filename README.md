@@ -14,6 +14,12 @@ A working prototype of Doodh Setu, a demand-to-farmer intelligence platform for 
 
 Open the apps in separate tabs of the same browser. Demo state is shared through the browser's local storage, so actions in one app show up in the others. "Reset demo" on the home page starts again.
 
+## Staff sign-in
+
+The planner console (`/planner`), society dashboard (`/society`) and lender desk (`/lender`) form one staff website behind a sign-in (`/login`). `middleware.ts` checks a signed cookie and the user's role on every request to those pages. The farmer app (`/farmer`) needs no sign-in and can be added to a phone home screen (`public/farmer.webmanifest`).
+
+Demo accounts (`lib/users.ts`): planner / planner123, approver / approver123, secretary / society123, lender / lender123, admin / admin123. The admin can switch between all three modules and act as planner or approver. Set `AUTH_SECRET` in Vercel to a long random string.
+
 ## Voice (Gnani.ai)
 
 Text-to-speech (reading answers and messages aloud) uses the Gnani.ai Vachana API through a server route, so the API key never reaches the browser. Voice input is switched off in the farmer app for now; farmers type or tap a suggested question.

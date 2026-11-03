@@ -73,7 +73,7 @@ export default function FarmerApp() {
   const viewKey = `${tab}-${sub ?? 'root'}-${lang}`;
   return (
     <F.Provider value={ctx}>
-    <div className="relative mx-auto min-h-screen max-w-[430px] overflow-hidden bg-milk sm:my-5 sm:min-h-[880px] sm:rounded-[34px] sm:border-[10px] sm:border-[#11152A] sm:shadow-[0_30px_60px_-30px_rgba(27,37,96,.45)]">
+    <div className="relative mx-auto min-h-screen max-w-[430px] overflow-hidden bg-milk sm:my-5 sm:min-h-[880px] sm:rounded-[34px] sm:border-[10px] sm:border-[#0A1B2E] sm:shadow-[0_30px_60px_-30px_rgba(27,37,96,.45)]">
       <header className="sticky top-0 z-20 bg-console text-white">
         <div className="flex items-center gap-2 px-4 pb-3 pt-3.5">
           {sub ? <button aria-label={T('back')} className="-ml-1 flex h-9 w-9 items-center justify-center rounded-full hover:bg-white/10" onClick={() => setSub(null)}><IconBack /></button> : null}
@@ -95,7 +95,7 @@ export default function FarmerApp() {
       {toast ? <div role="status" className="fixed bottom-24 left-1/2 z-30 flex w-[90%] max-w-[380px] -translate-x-1/2 animate-toast-in items-center gap-2 rounded-2xl bg-ink px-4 py-3 text-[15px] text-white shadow-lg"><IconCheck size={18} className="text-marigold" />{toast}</div> : null}
 
       {tab !== 'ask' && !sub ? (
-        <button aria-label={T('ask')} onClick={() => go('ask')} className="fixed bottom-[86px] z-20 flex h-14 w-14 items-center justify-center rounded-full bg-marigold text-ink shadow-[0_8px_20px_-6px_rgba(201,138,0,.7)] transition active:scale-95 sm:absolute" style={{ right: 'max(16px, calc(50% - 195px))' }}><IconChat size={24} />{unread ? <span className="absolute right-1 top-1 h-3 w-3 rounded-full bg-bad ring-2 ring-white" /> : null}</button>
+        <button aria-label={T('ask')} onClick={() => go('ask')} className="fixed bottom-[86px] z-20 flex h-14 w-14 items-center justify-center rounded-full bg-marigold text-ink shadow-[0_8px_20px_-6px_rgba(180,134,15,.7)] transition active:scale-95 sm:absolute" style={{ right: 'max(16px, calc(50% - 195px))' }}><IconChat size={24} />{unread ? <span className="absolute right-1 top-1 h-3 w-3 rounded-full bg-bad ring-2 ring-white" /> : null}</button>
       ) : null}
 
       <nav className="fixed bottom-0 left-1/2 z-20 w-full max-w-[430px] -translate-x-1/2 border-t border-line bg-white/95 pb-[env(safe-area-inset-bottom)] backdrop-blur sm:absolute sm:max-w-none" aria-label="Main">
@@ -181,7 +181,7 @@ function SignalNotice({ onOpen, compact }: { onOpen: () => void; compact?: boole
   const fresh = !s.farmer.heard;
   return (
     <div role="button" tabIndex={0} onClick={onOpen} onKeyDown={(e) => { if (e.key === 'Enter') onOpen(); }}
-      className="block w-full cursor-pointer overflow-hidden rounded-sheet bg-marigold text-left text-ink shadow-[0_10px_24px_-14px_rgba(201,138,0,.9)] transition active:scale-[0.99]">
+      className="block w-full cursor-pointer overflow-hidden rounded-sheet bg-marigold text-left text-ink shadow-[0_10px_24px_-14px_rgba(180,134,15,.9)] transition active:scale-[0.99]">
       <div className="blockprint h-3" />
       <div className="px-4 pb-4 pt-3">
         <div className="flex items-center justify-between gap-2">

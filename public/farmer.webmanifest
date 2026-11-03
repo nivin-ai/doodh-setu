@@ -1,0 +1,16 @@
+{
+  "name": "Doodh Setu Farmer",
+  "short_name": "Doodh Setu",
+  "description": "Your milk, earnings and society messages, in your language.",
+  "start_url": "/farmer",
+  "scope": "/farmer",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#F4F8FC",
+  "theme_color": "#084785",
+  "icons": [
+    { "src": "/icons/farmer-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/icons/farmer-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "/icons/farmer-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

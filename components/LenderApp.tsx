@@ -26,7 +26,7 @@ export default function LenderApp() {
   const newCount = ownCase && ownCase.status === 'submitted' ? 1 : 0;
   const menu = [{ id: 'cases', label: 'Cases', badge: newCount }, { id: 'products', label: 'Products' }, { id: 'audit', label: 'Audit trail' }];
   return (
-    <ConsoleShell title="DairyFin PartnerDesk" place={LENDER} menu={menu} active={view} onSelect={(v) => { setView(v); setOpen(null); }} right={<span className="rounded-full bg-white/10 px-3 py-1">Case officer</span>}>
+    <ConsoleShell title="DairyFin PartnerDesk" place={LENDER} menu={menu} active={view} onSelect={(v) => { setView(v); setOpen(null); }}>
       {view === 'cases' ? (open ? <CaseDetail refId={open} back={() => setOpen(null)} /> : <Cases onOpen={setOpen} />) : view === 'products' ? <Products /> : <Audit />}
     </ConsoleShell>
   );
@@ -92,7 +92,7 @@ function CaseDetail({ refId, back }: { refId: string; back: () => void }) {
           {active ? (<>
             <div className="mt-1 text-sm text-muted">Average net milk payments, last 6 months</div><div className="num font-display text-[28px] font-bold leading-tight">{inr(avg)} <span className="text-[15px] font-semibold text-muted">per month</span></div>
             <div className="text-sm">Coverage {months.length} of 12 months. Lowest month {inr(lowest.total)} ({fmtMonth(lowest.key)}).</div>
-            <div className="mt-2 h-36"><ResponsiveContainer><BarChart data={data}><XAxis dataKey="m" fontSize={10} tickLine={false} axisLine={false} /><YAxis hide /><Tooltip cursor={{ fill: '#F3F5F9' }} formatter={(v: number) => inr(v)} />
+            <div className="mt-2 h-36"><ResponsiveContainer><BarChart data={data}><XAxis dataKey="m" fontSize={10} tickLine={false} axisLine={false} /><YAxis hide /><Tooltip cursor={{ fill: '#F4F8FC' }} formatter={(v: number) => inr(v)} />
               <Bar dataKey="v" radius={[4, 4, 0, 0]}>{data.map((d, i) => <Cell key={i} fill={d.low ? CHART.marigold : CHART.indigo} />)}</Bar></BarChart></ResponsiveContainer></div>
           </>) : <p className="mt-2 text-sm text-bad">Consent withdrawn. Evidence is hidden.</p>}
         </div>
@@ -112,7 +112,7 @@ function CaseDetail({ refId, back }: { refId: string; back: () => void }) {
       </div>
       <div className="card mt-4 p-4">
         <div className="label">Documents</div>
-        <ul className="mt-2 divide-y divide-[#E8EBF1] text-sm">{a.docs.map((d) => <li key={d.id} className="flex items-center justify-between py-2"><span>{docName[d.id]}</span><span key={d.status} className="animate-pop">{d.status === 'received' ? <Chip tone="good"><IconCheck size={13} />Received</Chip> : d.status === 'requested' ? <Chip tone="warn">Requested</Chip> : <Chip>Missing</Chip>}</span></li>)}</ul>
+        <ul className="mt-2 divide-y divide-[#E6EDF5] text-sm">{a.docs.map((d) => <li key={d.id} className="flex items-center justify-between py-2"><span>{docName[d.id]}</span><span key={d.status} className="animate-pop">{d.status === 'received' ? <Chip tone="good"><IconCheck size={13} />Received</Chip> : d.status === 'requested' ? <Chip tone="warn">Requested</Chip> : <Chip>Missing</Chip>}</span></li>)}</ul>
       </div>
       <Note>Not shown to lenders: animal health records, signals, messages, voice data (BR-25). Final terms are recorded only after the bank&apos;s own sanction process (BR-18).</Note>
       {!['approved', 'declined', 'withdrawn'].includes(a.status) ? (
@@ -144,7 +144,7 @@ function Audit() {
   return (
     <div>
       <PageTitle title="Audit trail" sub="Consent, access and status events." />
-      <div className="card p-4"><ul className="divide-y divide-[#E8EBF1] text-[13px]">{s.audit.filter((x) => /consent|application|DF-|Requested|Uploaded|Set /.test(x.action)).map((x, i) => <li key={i} className="grid grid-cols-[150px_1fr] gap-3 py-1.5"><span className="num text-muted">{new Date(x.at).toLocaleString('en-IN')}</span><span><b className="font-semibold">{x.actor}</b>: {x.action}</span></li>)}</ul>
+      <div className="card p-4"><ul className="divide-y divide-[#E6EDF5] text-[13px]">{s.audit.filter((x) => /consent|application|DF-|Requested|Uploaded|Set /.test(x.action)).map((x, i) => <li key={i} className="grid grid-cols-[150px_1fr] gap-3 py-1.5"><span className="num text-muted">{new Date(x.at).toLocaleString('en-IN')}</span><span><b className="font-semibold">{x.actor}</b>: {x.action}</span></li>)}</ul>
         {s.audit.length === 0 ? <p className="text-muted">No events yet.</p> : null}</div>
     </div>
   );

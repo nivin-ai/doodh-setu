@@ -38,7 +38,7 @@ export default function ZoneMap({ city, cells, selected, onSelect }: { city: Cit
         const on = selected === c.zone.id;
         return (
           <Circle key={c.zone.id} center={[c.zone.lat, c.zone.lng]} radius={c.radius}
-            pathOptions={{ color: on ? '#171A26' : '#FFFFFF', weight: on ? 3 : 1.5, fillColor: c.color, fillOpacity: 0.78 }}
+            pathOptions={{ color: on ? '#122030' : '#FFFFFF', weight: on ? 3 : 1.5, fillColor: c.color, fillOpacity: 0.78 }}
             eventHandlers={{ click: () => onSelect(on ? null : c.zone.id) }}>
             <Tooltip direction="top" offset={[0, -6]} opacity={1} className="zone-tip">
               <b>{c.zone.name}</b><br />{c.label}

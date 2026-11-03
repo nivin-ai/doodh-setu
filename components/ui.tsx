@@ -2,6 +2,8 @@
 import Link from 'next/link';
 import { useEffect, useRef, useState } from 'react';
 import { speak, stopSpeaking, voiceHealth } from '@/lib/voice';
+import { ACCESS } from '@/lib/roles';
+import { signOut, useSession } from './session';
 import type { Lang } from '@/lib/i18n';
 import { useStore } from '@/lib/store';
 import { DEMO_DATES } from '@/lib/demo';
@@ -34,7 +36,7 @@ export function Waveform({ bars = 4, className = '', color = 'currentColor' }: {
 export function PlayButton({ text, lang, size = 36, tone = 'primary' }: { text: string; lang: Lang; size?: number; tone?: 'primary' | 'onMarigold' }) {
   const [playing, setPlaying] = useState(false);
   const label = playing ? 'Stop listening' : 'Listen';
-  const cls = tone === 'onMarigold' ? 'bg-ink text-marigold' : 'bg-primary-light text-primary hover:bg-[#DCE1F4]';
+  const cls = tone === 'onMarigold' ? 'bg-ink text-marigold' : 'bg-primary-light text-primary hover:bg-[#D3E4F6]';
   return (
     <button
       aria-label={label}
@@ -98,18 +100,41 @@ export function DemoBar() {
   );
 }
 
+const MODULES = [
+  { id: 'planner', href: '/planner', label: 'Planner' },
+  { id: 'society', href: '/society', label: 'Society' },
+  { id: 'lender', href: '/lender', label: 'Lender' },
+] as const;
+
 export function ConsoleShell({ title, place, menu, active, onSelect, right, children }: {
   title: string; place?: string; menu: { id: string; label: string; badge?: number }[]; active: string; onSelect: (id: string) => void; right?: React.ReactNode; children: React.ReactNode;
 }) {
+  const { user } = useSession();
+  const here = typeof window !== 'undefined' ? window.location.pathname.split('/')[1] : '';
+  const mods = user ? MODULES.filter((m) => ACCESS[m.id].includes(user.role)) : [];
   return (
     <div className="min-h-screen bg-milk">
       <DemoBar />
-      <header className="flex flex-wrap items-center gap-x-4 gap-y-2 bg-console px-4 py-3.5 text-white md:px-6">
-        <div className="flex flex-wrap items-baseline gap-x-3">
-          <span className="font-display text-[20px] font-bold leading-none tracking-tight">Doodh Setu</span>
-          <span className="text-[15px] text-white/75">{title}{place ? <span className="text-white/55">, {place}</span> : null}</span>
+      <header className="flex flex-wrap items-center gap-x-5 gap-y-2 bg-console px-4 py-3 text-white md:px-6">
+        <Link href="/" className="flex items-center gap-2.5">
+          <span className="flex h-7 w-7 items-center justify-center rounded-md bg-white text-[12px] font-bold text-primary">DS</span>
+          <span className="text-[17px] font-semibold tracking-tight">Doodh Setu</span>
+        </Link>
+        <span className="hidden text-[14px] text-white/75 sm:inline">{title}{place ? <span className="text-white/55">, {place}</span> : null}</span>
+        {mods.length > 1 ? (
+          <nav className="flex rounded-lg bg-white/10 p-0.5" aria-label="Modules">
+            {mods.map((m) => <Link key={m.id} href={m.href} aria-current={here === m.id ? 'page' : undefined} className={`rounded-md px-3 py-1 text-[13px] font-semibold transition-colors ${here === m.id ? 'bg-white text-primary' : 'text-white/80 hover:text-white'}`}>{m.label}</Link>)}
+          </nav>
+        ) : null}
+        <div className="ml-auto flex items-center gap-3 text-sm">
+          {right}
+          {user ? (
+            <>
+              <span className="hidden text-right leading-tight sm:block"><span className="block text-[12px] text-white/60">Signed in as</span><span className="block font-semibold">{user.name}</span></span>
+              <button onClick={signOut} className="rounded-lg border border-white/25 px-3 py-1.5 text-[13px] font-semibold text-white transition-colors hover:bg-white/10">Sign out</button>
+            </>
+          ) : null}
         </div>
-        <div className="ml-auto flex items-center gap-3 text-sm">{right}</div>
       </header>
       <div className="md:flex">
         {menu.length ? <><nav className="sticky top-0 hidden h-[calc(100vh-88px)] w-[228px] shrink-0 border-r border-line bg-white px-3 py-4 md:block" aria-label="Sections">
@@ -169,4 +194,4 @@ export function Segmented<T extends string>({ options, value, onChange }: { opti
   );
 }
 
-export const CHART = { indigo: '#26347F', indigoSoft: '#B9C2E6', marigold: '#F4B400', marigoldDeep: '#C98A00', green: '#1F7A4D', red: '#B23A2E', grey: '#C3C9D6', grid: '#E8EBF1', temp: '#C2552E' };
+export const CHART = { indigo: '#0B5CAD', indigoSoft: '#A7C8EB', marigold: '#F2BE2C', marigoldDeep: '#B4860F', green: '#14804A', red: '#B23A2E', grey: '#C3CEDB', grid: '#E6EDF5', temp: '#C2552E' };

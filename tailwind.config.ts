@@ -1,23 +1,23 @@
 import type { Config } from 'tailwindcss';
 
-// Doodh Setu tokens: ajrakh indigo + marigold on milk-white.
+// Doodh Setu tokens: dairy blue + butter yellow on milk-white, with pasture green for good news.
 const config: Config = {
   content: ['./app/**/*.{ts,tsx}', './components/**/*.{ts,tsx}', './lib/**/*.{ts,tsx}'],
   theme: {
     extend: {
       colors: {
-        primary: { DEFAULT: '#26347F', dark: '#1B2560', light: '#E9ECF8' },
-        marigold: { DEFAULT: '#F4B400', deep: '#C98A00', soft: '#FFF3CF' },
-        ink: '#171A26',
-        muted: '#5B6275',
-        line: '#DCE1EA',
-        fill: '#EEF1F6',
-        alt: '#F7F8FB',
-        milk: '#F3F5F9',
-        good: { DEFAULT: '#1F7A4D', light: '#E3F2E9' },
-        warn: { DEFAULT: '#8A5A00', light: '#FFF3CF' },
+        primary: { DEFAULT: '#0B5CAD', dark: '#084785', light: '#E6F0FA' },
+        marigold: { DEFAULT: '#F2BE2C', deep: '#B4860F', soft: '#FFF5D6' },
+        ink: '#122030',
+        muted: '#55657A',
+        line: '#D9E3EE',
+        fill: '#EDF3F9',
+        alt: '#F7FAFD',
+        milk: '#F4F8FC',
+        good: { DEFAULT: '#14804A', light: '#E1F3E9' },
+        warn: { DEFAULT: '#8A5A00', light: '#FFF5D6' },
         bad: { DEFAULT: '#B23A2E', light: '#FBE9E6' },
-        console: '#1B2560',
+        console: '#084785',
       },
       fontFamily: {
         // Mukta covers Latin, Devanagari and Gujarati; Noto Sans fills the other scripts glyph by glyph

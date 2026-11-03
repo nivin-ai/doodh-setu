@@ -3,11 +3,11 @@
 @tailwind utilities;
 
 :root { color-scheme: light; }
-html, body { background: #F3F5F9; color: #171A26; }
+html, body { background: #F4F8FC; color: #122030; }
 body { font-family: 'Mukta Vaani', 'Mukta', 'Noto Sans Bengali', 'Noto Sans Telugu', 'Noto Sans Tamil', 'Noto Sans Kannada', 'Noto Sans Malayalam', 'Noto Sans Oriya', system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
 .indic { line-height: 1.5; }
 .num { font-variant-numeric: tabular-nums; }
-:focus-visible { outline: 2px solid #26347F; outline-offset: 2px; border-radius: 6px; }
+:focus-visible { outline: 2px solid #0B5CAD; outline-offset: 2px; border-radius: 6px; }
 
 @layer components {
   .btn { @apply inline-flex select-none items-center justify-center gap-2 rounded-[10px] px-4 font-semibold transition duration-150 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-45 disabled:active:scale-100; min-height: 44px; }
@@ -18,22 +18,22 @@ body { font-family: 'Mukta Vaani', 'Mukta', 'Noto Sans Bengali', 'Noto Sans Telu
   .label { @apply text-[13px] font-semibold text-muted; }
   .input { @apply w-full rounded-lg border border-line bg-white px-3 py-2 text-ink outline-none transition focus:border-primary focus:ring-2 focus:ring-primary-light; }
   .tbl th { @apply border-b border-line bg-alt px-3 py-2 text-left text-[13px] font-semibold text-muted; }
-  .tbl td { @apply border-b border-[#E8EBF1] px-3 py-2.5 align-top text-sm; }
+  .tbl td { @apply border-b border-[#E6EDF5] px-3 py-2.5 align-top text-sm; }
   .tbl tbody tr { @apply transition-colors; }
   .bar-anim { transition: width 450ms cubic-bezier(.2,.7,.2,1), left 450ms cubic-bezier(.2,.7,.2,1); }
 }
 
-/* Block-print band used on society notices (ajrakh-inspired, indigo on marigold) */
+/* Patterned band used on society notices: milk-drop dots on dairy blue */
 .blockprint {
-  background-color: #26347F;
+  background-color: #0B5CAD;
   background-image:
-    radial-gradient(circle at 8px 8px, #F4B400 2.2px, transparent 2.6px),
-    radial-gradient(circle at 0 0, #FFF3CF 1.6px, transparent 2px),
-    radial-gradient(circle at 16px 16px, #FFF3CF 1.6px, transparent 2px);
+    radial-gradient(circle at 8px 8px, #FFFFFF 2.2px, transparent 2.6px),
+    radial-gradient(circle at 0 0, #A7C8EB 1.6px, transparent 2px),
+    radial-gradient(circle at 16px 16px, #A7C8EB 1.6px, transparent 2px);
   background-size: 16px 16px;
 }
 
-@keyframes pulse-ring { 0% { box-shadow: 0 0 0 0 rgba(38,52,127,.40); } 100% { box-shadow: 0 0 0 20px rgba(38,52,127,0); } }
+@keyframes pulse-ring { 0% { box-shadow: 0 0 0 0 rgba(11,92,173,.40); } 100% { box-shadow: 0 0 0 20px rgba(11,92,173,0); } }
 .listening { animation: pulse-ring 1.2s ease-out infinite; }
 
 @media (prefers-reduced-motion: reduce) {
@@ -48,7 +48,7 @@ body { font-family: 'Mukta Vaani', 'Mukta', 'Noto Sans Bengali', 'Noto Sans Telu
 @keyframes fly { 0% { transform: translate(0,0) scale(1); opacity: 1; } 100% { transform: translate(var(--dx), var(--dy)) scale(.4); opacity: 0; } }
 
 /* Demand map */
-.zone-map { background: #EEF1F6; font-family: inherit; }
+.zone-map { background: #EDF3F9; font-family: inherit; }
 .zone-map path.leaflet-interactive { transition: fill 450ms ease, stroke 200ms ease; }
 .zone-map .leaflet-control-attribution { font-size: 10px; }
-.leaflet-tooltip.zone-tip { border: 0; border-radius: 10px; padding: 6px 10px; font: 13px/1.35 'Mukta Vaani', 'Mukta', system-ui, sans-serif; color: #171A26; box-shadow: 0 6px 18px -8px rgba(23,26,38,.45); }
+.leaflet-tooltip.zone-tip { border: 0; border-radius: 10px; padding: 6px 10px; font: 13px/1.35 'Mukta Vaani', 'Mukta', system-ui, sans-serif; color: #122030; box-shadow: 0 6px 18px -8px rgba(18,32,48,.45); }
