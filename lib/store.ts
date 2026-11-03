@@ -29,16 +29,13 @@ export interface Application {
   loanConsentId?: string;
   sharing?: SharingLog[];
 }
-export type CampaignStatus = 'draft' | 'approved' | 'held' | 'override';
-export interface Marketing { campaigns: Record<string, CampaignStatus>; overrides: Record<string, string>; story: 'none' | 'sent' | 'published'; storyHeard: boolean }
 export interface AuditEvent { at: string; actor: string; action: string }
 
 interface State {
   demoDate: DemoDateKey;
   lang: Lang;
   autoplay: boolean;
-  plannerUser: 'planner' | 'approver' | 'marketer';
-  marketing: Marketing;
+  plannerUser: 'planner' | 'approver';
   incentive: { status: IncentiveStatus; rate: number; ids: number[]; submittedBy?: string; approvedBy?: string; concern?: string; reason?: string; notes: Partial<Record<Lang, string>> };
   farmer: { heard: boolean; interested: boolean; correction: boolean; signalConsent: boolean };
   consents: Consent[];
@@ -49,8 +46,6 @@ interface State {
   log: (actor: string, action: string) => void;
   setIncentive: (p: Partial<State['incentive']>) => void;
   setFarmer: (p: Partial<State['farmer']>) => void;
-  setCampaign: (id: string, st: CampaignStatus, reason?: string) => void;
-  setMarketing: (p: Partial<Marketing>) => void;
   addQuery: (text: string, lang: Lang) => void;
   replyQuery: (id: string, reply: string) => void;
   grantConsent: (c: Omit<Consent, 'id' | 'grantedAt' | 'status'>) => string;
@@ -68,7 +63,6 @@ const initial = {
   lang: 'gu' as Lang,
   autoplay: false,
   plannerUser: 'planner' as State['plannerUser'],
-  marketing: { campaigns: {}, overrides: {}, story: 'none', storyHeard: false } as Marketing,
   incentive: { status: 'none' as IncentiveStatus, rate: 40, ids: SUGGESTED_IDS, notes: { gu: '', hi: '', en: '' } },
   farmer: { heard: false, interested: false, correction: false, signalConsent: true },
   consents: [] as Consent[],
@@ -85,11 +79,6 @@ export const useStore = create<State>()(
       log: (actor, action) => set({ audit: [{ at: now(), actor, action }, ...get().audit].slice(0, 200) }),
       setIncentive: (p) => set({ incentive: { ...get().incentive, ...p } }),
       setFarmer: (p) => set({ farmer: { ...get().farmer, ...p } }),
-      setCampaign: (id, st, reason) => {
-        const m = get().marketing;
-        set({ marketing: { ...m, campaigns: { ...m.campaigns, [id]: st }, overrides: reason ? { ...m.overrides, [id]: reason } : m.overrides } });
-      },
-      setMarketing: (p) => set({ marketing: { ...get().marketing, ...p } }),
       addQuery: (text, lang) => set({ queries: [{ id: 'Q' + (get().queries.length + 101), text, lang, at: now(), status: 'open' }, ...get().queries] }),
       replyQuery: (id, reply) => set({ queries: get().queries.map((q) => (q.id === id ? { ...q, reply, status: 'resolved' } : q)) }),
       grantConsent: (c) => {
@@ -136,7 +125,7 @@ export const useStore = create<State>()(
         set({ application: { ...a, status: 'in_review', docs: a.docs.map((d) => (d.id === 'quote' ? { ...d, status: 'received' } : d)), history: [...a.history, { status: 'in_review', at: now(), note: 'Document received; back in review' }] } });
         get().log('Savitaben (farmer)', `Uploaded cattle purchase quote for ${a.ref}`);
       },
-      reset: () => set({ ...initial, incentive: { ...initial.incentive, ids: [...SUGGESTED_IDS] }, marketing: { campaigns: {}, overrides: {}, story: 'none', storyHeard: false } }),
+      reset: () => set({ ...initial, incentive: { ...initial.incentive, ids: [...SUGGESTED_IDS] } }),
     }),
     { name: 'doodh-setu-demo-v1' },
   ),

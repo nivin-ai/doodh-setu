@@ -1,6 +1,6 @@
 'use client';
 // Planner console: one screen (FRD P-01). Sections follow the planning story:
-// data health -> demand -> product mix -> milk gap and incentive (with approval) -> marketing -> results.
+// data health -> demand -> product mix -> milk gap and incentive (with approval) -> results.
 import { useMemo, useState } from 'react';
 import {
   Area, Bar, BarChart, CartesianGrid, Cell, ComposedChart, LabelList, Legend, Line, ReferenceArea, ResponsiveContainer, Tooltip, XAxis, YAxis,
@@ -9,7 +9,6 @@ import { useStore } from '@/lib/store';
 import { DEMO_DATES, UNION } from '@/lib/demo';
 import { CITIES, HEATWAVE, PRODUCTS, forecast, type City, type ProductId } from '@/lib/demand';
 import { CAP_SHARE, FAIRNESS_MIN, MONTHS_LEAN, SOCIETIES, SOURCES, SUGGESTED_IDS, incentiveImpact, milkGap, plan } from '@/lib/union';
-import { CAMPAIGNS, campaignPlan, campaignResult, type Campaign } from '@/lib/marketing';
 import { fmtDate, inr, inrShort, num, pct } from '@/lib/util';
 import { CHART, Chip, ConsoleShell, Count, Note, PageTitle, Segmented, Stat } from './ui';
 import { IconCheck } from './icons';
@@ -19,22 +18,21 @@ const pill = (on: boolean) => `rounded-full border px-3 py-1 text-sm transition-
 const axis = { tickLine: false, axisLine: false, fontSize: 11, stroke: '#5B6275' } as const;
 const ASOF = DEMO_DATES['mar'].date;
 
-const USERS = { planner: 'Priya (planner)', approver: 'Mr Shah (approver)', marketer: 'Neha (marketing)' };
+const USERS = { planner: 'Priya (planner)', approver: 'Mr Shah (approver)' };
 
 export default function PlannerApp() {
   const s = useStore();
   return (
     <ConsoleShell title="Planner console" place={UNION} menu={[]} active="planner" onSelect={() => undefined}
       right={<label className="flex items-center gap-2 text-white/75">Signed in as
-        <select className="rounded-full border-0 bg-white/10 px-3 py-1 text-white outline-none [&>option]:text-ink" value={s.plannerUser} onChange={(e) => s.set({ plannerUser: e.target.value as 'planner' | 'approver' | 'marketer' })}>
-          <option value="planner">{USERS.planner}</option><option value="approver">{USERS.approver}</option><option value="marketer">{USERS.marketer}</option></select></label>}>
+        <select className="rounded-full border-0 bg-white/10 px-3 py-1 text-white outline-none [&>option]:text-ink" value={s.plannerUser === 'approver' ? 'approver' : 'planner'} onChange={(e) => s.set({ plannerUser: e.target.value as 'planner' | 'approver' })}>
+          <option value="planner">{USERS.planner}</option><option value="approver">{USERS.approver}</option></select></label>}>
       <Overview />
       <div className="mt-6 grid gap-5 xl:grid-cols-2">
         <Section n={1} title="Demand forecast" sub="What will sell, where and when"><DemandCard /></Section>
         <Section n={2} title="Product mix" sub="Best use of each litre of milk"><MixCard /></Section>
         <Section n={3} title="Buffalo milk gap and incentive" sub="Close the gap with a premium; approver signs off" wide><GapIncentive /></Section>
-        <Section n={4} title="Marketing" sub="Promote only what the plants can supply"><MarketingCard /></Section>
-        <Section n={5} title="Results" sub="What the signal and campaigns delivered"><ResultsCard /></Section>
+        <Section n={4} title="Results" sub="What the premium signal delivered" wide><ResultsCard /></Section>
       </div>
     </ConsoleShell>
   );
@@ -264,7 +262,7 @@ function Approval() {
     );
   }
   if (inc.status === 'approved') return <div className="mt-3 text-sm text-good"><IconCheck size={16} className="inline" /> Approved by {inc.approvedBy ?? USERS.approver}. Released to societies to publish.</div>;
-  if (inc.status === 'published') return <div className="mt-3 text-sm text-good"><IconCheck size={16} className="inline" /> Published by societies. See results in section 5.</div>;
+  if (inc.status === 'published') return <div className="mt-3 text-sm text-good"><IconCheck size={16} className="inline" /> Published by societies. See results in section 4.</div>;
   if (inc.status !== 'submitted') return null;
   const isApprover = s.plannerUser === 'approver';
   return (
@@ -282,72 +280,18 @@ function Approval() {
   );
 }
 
-// ---------- 4. Marketing ----------
-function MarketingCard() {
-  const s = useStore();
-  const isMkt = s.plannerUser === 'marketer';
-  const story = s.marketing.story;
-  return (
-    <div>
-      {!isMkt ? <div className="mb-3 rounded-xl bg-fill p-2.5 text-sm text-muted">Campaigns are decided by the marketing manager (BR-34). Switch to <b>{USERS.marketer}</b> at the top right.</div> : null}
-      <div className="space-y-2">{CAMPAIGNS.map((c) => <CampaignRow key={c.id} c={c} isMkt={isMkt} />)}</div>
-      <div className="mt-4 flex flex-wrap items-center gap-3 border-t border-line pt-3">
-        <div className="text-sm"><b>Milk story for farmers</b>: tells members where their milk goes this summer.</div>
-        {story === 'none' ? <button className="btn-quiet !min-h-[34px] text-sm" onClick={() => { s.setMarketing({ story: 'sent' }); s.log(USERS[s.plannerUser], 'Sent the April milk story to societies for publishing'); }}>Send to societies</button>
-          : <Chip tone={story === 'published' ? 'good' : 'primary'}>{story === 'sent' ? 'Sent to societies' : 'Published'}</Chip>}
-      </div>
-    </div>
-  );
-}
-
-function CampaignRow({ c, isMkt }: { c: Campaign; isMkt: boolean }) {
-  const s = useStore();
-  const p = useMemo(() => campaignPlan(c), [c]);
-  const st = s.marketing.campaigns[c.id] ?? 'draft';
-  const [over, setOver] = useState(false);
-  const [why, setWhy] = useState('');
-  return (
-    <div className="rounded-xl border border-line p-3">
-      <div className="flex flex-wrap items-center gap-2">
-        <span className="font-semibold">{c.title}</span>
-        <Chip tone={p.check.ok ? 'good' : 'warn'}>Supply {p.check.ok ? 'go' : 'hold'}</Chip>
-        {st !== 'draft' ? <Chip tone={st === 'approved' ? 'good' : st === 'override' ? 'bad' : 'warn'}>{st === 'override' ? 'Approved over hold' : st}</Chip> : null}
-      </div>
-      <div className="mt-0.5 text-[13px] text-muted">{c.cities.join(', ')} | budget {inrShort(c.budget)} | expected +{pct(c.lift)} sales, ₹{p.perRupee.toFixed(1)} per ₹1</div>
-      {!p.check.ok ? <div className="mt-1 text-[13px]">{p.check.reason}</div> : null}
-      {st === 'draft' && isMkt ? (
-        <div className="mt-2 flex flex-wrap gap-2">
-          {p.check.ok
-            ? <button className="btn-primary !min-h-[34px] text-sm" onClick={() => { s.setCampaign(c.id, 'approved'); s.log(USERS.marketer, `Approved campaign "${c.title}" (${inrShort(c.budget)}); supply check go`); }}>Approve</button>
-            : <><button className="btn-primary !min-h-[34px] text-sm" onClick={() => { s.setCampaign(c.id, 'held'); s.log(USERS.marketer, `Held campaign "${c.title}": ${p.check.reason}`); }}>Accept hold</button>
-              <button className="btn-quiet !min-h-[34px] text-sm" onClick={() => setOver(!over)}>Override</button></>}
-        </div>
-      ) : null}
-      {over && st === 'draft' ? (
-        <div className="mt-2 flex gap-2">
-          <input className="input" placeholder="Written reason; the planner is alerted" value={why} onChange={(e) => setWhy(e.target.value)} />
-          <button className="btn-quiet" disabled={!why.trim()} onClick={() => { s.setCampaign(c.id, 'override', why); s.log(USERS.marketer, `Overrode supply-check hold on "${c.title}": ${why}`); }}>Approve</button>
-        </div>
-      ) : null}
-    </div>
-  );
-}
-
-// ---------- 5. Results ----------
+// ---------- 4. Results ----------
 function ResultsCard() {
   const s = useStore();
   const inc = s.incentive;
   const apr = s.demoDate === 'apr';
-  const live = CAMPAIGNS.filter((c) => ['approved', 'override'].includes(s.marketing.campaigns[c.id] ?? ''));
   const published = inc.status === 'published';
   const imp = incentiveImpact(ASOF, inc.rate, inc.ids);
   const aprCost = imp.cost / 3, aprValue = imp.valueGained / 3;
   const ctrl = [{ g: 'Pilot societies', v: 865 + 36 + inc.rate }, { g: 'Control societies', v: 865 + 34 }];
-  const camp = live.map((c) => ({ c, r: campaignResult(c) }));
-  const spend = live.reduce((a, c) => a + c.budget, 0), cValue = camp.reduce((a, x) => a + x.r.value, 0);
   return (
     <div>
-      {!published && !live.length ? <div className="rounded-xl border border-dashed border-line p-6 text-center text-sm text-muted">Nothing live yet. Approve the incentive (section 3) and have the society publish it, or approve a campaign (section 4).</div> : null}
+      {!published ? <div className="rounded-xl border border-dashed border-line p-6 text-center text-sm text-muted">Nothing live yet. Approve the incentive (section 3) and have the society publish it.</div> : null}
       {published ? (
         <>
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
@@ -370,12 +314,6 @@ function ResultsCard() {
             </div>
           ) : <div className="mt-2 text-sm text-muted">Results appear after the first month: switch the demo date to 30 Apr.</div>}
         </>
-      ) : null}
-      {live.length ? (
-        <div className="mt-3 border-t border-line pt-3 text-sm">
-          <b>Campaigns:</b> {live.length} live, spend {inrShort(spend)}.{' '}
-          {apr ? <>Sales lift vs control areas {camp.map(({ c, r }) => `${c.title.split(':')[0]} +${pct(r.lift, 1)}`).join(', ')}; return <b>₹{(cValue / spend).toFixed(1)} per ₹1</b>.</> : 'Lift vs control areas shows after launch (30 Apr).'}
-        </div>
       ) : null}
       <Details label="audit log">
         <ul className="max-h-56 divide-y divide-[#E8EBF1] overflow-auto text-[13px]">{s.audit.length ? s.audit.map((a, i) => <li key={i} className="grid grid-cols-[140px_1fr] gap-3 py-1.5"><span className="num text-muted">{new Date(a.at).toLocaleString('en-IN')}</span><span><b className="font-semibold">{a.actor}</b>: {a.action}</span></li>) : <li className="py-1.5 text-muted">No actions yet.</li>}</ul>

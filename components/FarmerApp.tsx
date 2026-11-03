@@ -3,9 +3,7 @@ import { createContext, useContext, useEffect, useMemo, useRef, useState } from 
 import { Bar, BarChart, Cell, ResponsiveContainer, XAxis, YAxis, Tooltip, LabelList } from 'recharts';
 import { useStore, activePremium, type AppStatus } from '@/lib/store';
 import { DEMO_DATES, FARMER } from '@/lib/demo';
-import { LANGS, LANG_CODE, PHRASES, SIGNAL_NEED, SIGNAL_TITLE, STORY, STORY_PRODUCT, STT_LANGS, signalMessage, storyMessage, t, type Lang } from '@/lib/i18n';
-import { milkStory } from '@/lib/marketing';
-import { PRODUCT_COLOR } from './MarketingView';
+import { LANGS, LANG_CODE, PHRASES, SIGNAL_NEED, SIGNAL_TITLE, STT_LANGS, signalMessage, t, type Lang } from '@/lib/i18n';
 import { dayTotals, explainChange, monthKeysUpTo, monthSummary, worthToFarmer, type MonthSummary } from '@/lib/farmer';
 import { answer } from '@/lib/ask';
 import { browserRecognition, recordWav, speak, stopSpeaking, transcribe, voiceHealth, type Recorder } from '@/lib/voice';
@@ -16,7 +14,7 @@ import { Chip, Count, PlayButton, Segmented, Waveform, CHART } from './ui';
 import { IconBack, IconBank, IconCheck, IconChevron, IconHome, IconMic, IconNotice, IconPhone, IconRupee, IconSend, IconUser } from './icons';
 
 type Tab = 'home' | 'earnings' | 'signals' | 'finance' | 'ask';
-type Sub = null | 'story' | 'signal' | 'why' | 'income' | 'afford' | 'products' | 'consent' | 'loanConsent' | 'apply' | 'tracker' | 'profile';
+type Sub = null | 'signal' | 'why' | 'income' | 'afford' | 'products' | 'consent' | 'loanConsent' | 'apply' | 'tracker' | 'profile';
 
 const PRODUCTS_DEMO = [
   { id: 'gpb', lender: 'Gramin Partner Bank (demo)', name: 'Cattle loan', purpose: 'cattle', min: 25000, max: 200000, rate: 10.5, maxTenure: 36, feePct: 1, elig: 'Society member for 12+ months with regular milk supply' },
@@ -83,7 +81,7 @@ export default function FarmerApp() {
 
       <div key={viewKey} className={`indic px-4 pb-32 pt-4 text-[17px] ${sub ? 'animate-slide-in' : 'animate-view-in'}`}>
         {sub === 'profile' ? <Profile /> :
-          tab === 'home' ? (sub === 'story' ? <Story /> : <Home />) :
+          tab === 'home' ? <Home /> :
           tab === 'earnings' ? (sub === 'why' ? <Why /> : <Earnings />) :
           tab === 'signals' ? (sub === 'signal' ? <SignalDetail /> : <Signals />) :
           tab === 'finance' ? <Finance /> :
@@ -169,59 +167,11 @@ function Home() {
       {published ? <SignalNotice onOpen={() => go('signals', 'signal')} /> : (
         <div className="rounded-sheet border border-dashed border-line px-4 py-5 text-center text-[15px] text-muted">{T('noSignals')}</div>
       )}
-      {s.marketing.story === 'published' ? <StoryCard /> : null}
       <div className="px-1 text-[14px] text-muted">{T('alertsNone')}</div>
     </div>
   );
 }
 
-// Monthly milk story card (FRD FW12, screen F-04 entry to F-21)
-function StoryCard() {
-  const { s, lang, setSub } = useF();
-  const shares = milkStory();
-  const S = STORY[lang];
-  const top = [...shares].sort((a, b) => b.share - a.share).filter((x) => x.id !== 'milk' && x.id !== 'sink').slice(0, 3);
-  return (
-    <div role="button" tabIndex={0} onClick={() => setSub('story')} onKeyDown={(e) => { if (e.key === 'Enter') setSub('story'); }}
-      className="block w-full cursor-pointer rounded-sheet border border-line bg-white px-4 py-4 text-left transition hover:border-primary/40 active:scale-[0.99]">
-      <div className="flex items-center justify-between gap-2">
-        <span className="flex items-center gap-2"><span className="label">{S.label}: {FARMER.society}</span>{!s.marketing.storyHeard ? <Chip tone="marigold">{S.new}</Chip> : null}</span>
-        <PlayButton text={storyMessage(lang, FARMER.society, shares)} lang={lang} />
-      </div>
-      <div className="mt-1 font-display text-[20px] font-bold leading-tight">{S.title}</div>
-      <div className="mt-2.5 flex h-3 overflow-hidden rounded-full">{shares.map((x) => <div key={x.id} style={{ width: `${x.share}%`, background: PRODUCT_COLOR[x.id] }} />)}</div>
-      <div className="mt-1.5 flex flex-wrap gap-x-3 text-[13px] text-muted">{top.map((x) => <span key={x.id}>{STORY_PRODUCT[lang][x.id]} {x.share}</span>)}</div>
-      <div className="mt-2 flex items-center gap-0.5 text-[14px] font-semibold text-primary">{S.open}<IconChevron size={16} /></div>
-    </div>
-  );
-}
-
-function Story() {
-  const { s, lang, T, go } = useF();
-  const shares = [...milkStory()].sort((a, b) => b.share - a.share);
-  const S = STORY[lang];
-  const msg = storyMessage(lang, FARMER.society, shares);
-  useEffect(() => { if (!s.marketing.storyHeard) { s.setMarketing({ storyHeard: true }); s.log('Savitaben (farmer)', 'Opened the April milk story'); } }, []); // eslint-disable-line react-hooks/exhaustive-deps
-  return (
-    <div className="space-y-3.5">
-      <div className="flex items-center justify-between"><span className="text-[13px] font-semibold text-muted">{T('fromSociety')}: {FARMER.society}</span><PlayButton text={msg} lang={lang} /></div>
-      <h2 className="font-display text-[24px] font-bold leading-tight">{S.title}</h2>
-      <section className="rounded-sheet border border-line bg-white px-4 py-4">
-        <div className="label">{S.per100}</div>
-        <div className="mt-3 space-y-2.5">{shares.map((x) => (
-          <div key={x.id} className="grid grid-cols-[1fr_auto] items-center gap-x-3 text-[15px]">
-            <span>{STORY_PRODUCT[lang][x.id]}</span><span className="num font-bold">{x.share} {S.litres}</span>
-            <div className="col-span-2 h-2 rounded-full bg-fill"><div className="bar-anim h-2 rounded-full" style={{ width: `${x.share}%`, background: PRODUCT_COLOR[x.id] }} /></div>
-          </div>
-        ))}</div>
-      </section>
-      <section className="rounded-xl border border-primary bg-primary-light p-4 text-[15px]">{S.why}</section>
-      <button className="btn-primary w-full" onClick={() => go('earnings')}>{T('whyChanged')}</button>
-    </div>
-  );
-}
-
-// The one loud element: a printed notice from the society.
 function SignalNotice({ onOpen, compact }: { onOpen: () => void; compact?: boolean }) {
   const { s, lang, T, worth } = useF();
   const fresh = !s.farmer.heard;

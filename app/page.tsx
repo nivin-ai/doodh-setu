@@ -9,7 +9,7 @@ import { DEMO_DATES, type DemoDateKey } from '@/lib/demo';
 const APPS = [
   { href: '/farmer', title: 'Farmer app', who: 'Savitaben, member of Anand Milk Society', desc: 'Voice-first app in Gujarati, Hindi and English: milk, earnings, signals, DairyFin finance, ask by voice.' },
   { href: '/society', title: 'Society dashboard', who: 'Rameshbhai, society secretary', desc: 'Receive approved targets, publish messages in three languages, track members and answer queries.' },
-  { href: '/planner', title: 'Planner console', who: 'Priya (planner), Mr Shah (approver) and Neha (marketing)', desc: 'One screen: demand forecast, product mix, milk gap and incentive with approval, supply-checked marketing, and results.' },
+  { href: '/planner', title: 'Planner console', who: 'Priya (planner) and Mr Shah (approver)', desc: 'One screen: demand forecast, product mix, milk gap and incentive with approval, and results.' },
   { href: '/lender', title: 'Lender desk (DairyFin)', who: 'Anita, case officer at a demo partner bank', desc: 'Review consented income evidence, request documents and update application status.' },
 ];
 
@@ -23,13 +23,8 @@ const STEPS: { d: DemoDateKey; app: string; text: string }[] = [
   { d: 'mar', app: 'Farmer', text: 'Hear the signal in Gujarati, see what it is worth, tap "I\'m interested". Ask a question by voice.' },
   { d: 'mar', app: 'Farmer', text: 'Finance: check affordability, compare demo offers, consent and apply.' },
   { d: 'mar', app: 'Lender', text: 'Review the case and request a document; the farmer uploads it; mark approved.' },
-  { d: 'mar', app: 'Planner', text: 'Section 4, Marketing: switch user to Neha. Approve the heatwave lassi campaign (supply go); accept the hold on paneer and curd.' },
-  { d: 'mar', app: 'Planner', text: 'Section 4: send the milk story to societies.' },
-  { d: 'mar', app: 'Society', text: 'Milk story: listen in three languages and publish.' },
-  { d: 'mar', app: 'Farmer', text: 'Home: open "Where your milk goes this summer" and listen.' },
   { d: 'apr', app: 'Farmer', text: 'Switch demo date to 30 Apr: earnings show the premium and why the price changed.' },
-  { d: 'apr', app: 'Planner', text: 'Section 5, Results: response and the share of value passed to farmers.' },
-  { d: 'apr', app: 'Planner', text: 'Section 5: campaign lift against control areas and return per rupee.' },
+  { d: 'apr', app: 'Planner', text: 'Section 4, Results: response and the share of value passed to farmers.' },
 ];
 
 // The loop the platform closes: city demand reaches the union, the union signals the society,
@@ -72,8 +67,6 @@ function Home() {
     { k: 'Farmer interested', v: s.farmer.interested ? 'yes' : 'no' },
     { k: 'Application', v: s.application ? s.application.status : 'none' },
     { k: 'Open queries', v: String(openQ) },
-    { k: 'Campaigns approved', v: String(Object.values(s.marketing.campaigns).filter((x) => x === 'approved' || x === 'override').length) },
-    { k: 'Milk story', v: s.marketing.story },
   ];
   return (
     <div className="min-h-screen bg-milk">
