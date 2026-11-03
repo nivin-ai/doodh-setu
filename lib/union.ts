@@ -45,8 +45,12 @@ export function demandMilkLitres(asOf: string, from: string, to: string) {
 export interface Allocation { id: string; name: string; litres: number; value: number; buffalo: number; want: number }
 export interface MixPlan { rows: Allocation[]; totalValue: number; valuePerLitre: number; buffaloNeeded: number; buffaloUsed: number; supply: number; buffaloSupply: number }
 
-// Allocate milk to products. Recommended plan: highest value per litre first, limited by
-// demand, plant capacity and available buffalo milk. Current plan: last year's mix.
+// Allocate milk to products. Recommended plan: buffalo milk is the scarce input, so it goes
+// first to the products that earn the most per litre of buffalo milk (value above the
+// powder-and-butter fallback, divided by the product's buffalo share). Limited by demand,
+// plant capacity and available buffalo milk. Current plan: last year's mix.
+const SINK_VALUE = 40;
+export const perBuffaloLitre = (m: MixProduct) => (m.valuePerLitre - SINK_VALUE) / m.buffaloShare;
 export function plan(asOf: string, month = MONTHS_LEAN[0], recommended = true, extraBuffalo = 0): MixPlan {
   const demand = demandMilkLitres(asOf, month.from, month.to);
   const buf = month.supply.buffalo + extraBuffalo;
@@ -59,7 +63,7 @@ export function plan(asOf: string, month = MONTHS_LEAN[0], recommended = true, e
   let bufLeft = buf - liquid * 0.4;
   let need = liquid * 0.4;
   const products = MIX.filter((m) => m.id !== 'milk' && m.id !== 'sink');
-  const order = recommended ? [...products].sort((a, b) => b.valuePerLitre - a.valuePerLitre) : products;
+  const order = recommended ? [...products].sort((a, b) => perBuffaloLitre(b) - perBuffaloLitre(a)) : products;
   for (const m of order) {
     const want = recommended ? Math.min(demand[m.id] ?? 0, m.capacity) : CURRENT[m.id as string];
     need += Math.min(demand[m.id] ?? 0, m.capacity) * m.buffaloShare;
@@ -73,6 +77,26 @@ export function plan(asOf: string, month = MONTHS_LEAN[0], recommended = true, e
   const totalValue = rows.reduce((x, r) => x + r.value, 0);
   const buffaloUsed = rows.reduce((x, r) => x + r.buffalo, 0);
   return { rows, totalValue, valuePerLitre: totalValue / supply, buffaloNeeded: need, buffaloUsed, supply, buffaloSupply: buf };
+}
+
+// Evaluate a plan the planner has adjusted by hand. Liquid milk stays at its commitment;
+// whatever milk is left over goes to milk powder and butter.
+export function customPlan(asOf: string, month: (typeof MONTHS_LEAN)[number], litres: Record<string, number>): MixPlan & { buffaloShort: number; milkShort: number } {
+  const base = plan(asOf, month, true);
+  const rows: Allocation[] = base.rows.filter((r) => r.id === 'milk');
+  let used = rows[0].litres;
+  for (const m of MIX.filter((x) => x.id !== 'milk' && x.id !== 'sink')) {
+    const r = base.rows.find((x) => x.id === m.id)!;
+    const l = Math.max(0, litres[m.id] ?? r.litres);
+    rows.push({ id: m.id, name: m.name, litres: l, value: l * m.valuePerLitre, buffalo: l * m.buffaloShare, want: r.want });
+    used += l;
+  }
+  const left = Math.max(0, base.supply - used);
+  rows.push({ id: 'sink', name: 'Milk powder and butter', litres: left, value: left * SINK_VALUE, buffalo: 0, want: left });
+  const totalValue = rows.reduce((x, r) => x + r.value, 0);
+  const buffaloUsed = rows.reduce((x, r) => x + r.buffalo, 0);
+  return { ...base, rows, totalValue, valuePerLitre: totalValue / base.supply, buffaloUsed,
+    buffaloShort: Math.max(0, buffaloUsed - base.buffaloSupply), milkShort: Math.max(0, used - base.supply) };
 }
 
 export function milkGap(asOf: string) {
@@ -111,7 +135,7 @@ export const SUGGESTED_IDS = [...SOCIETIES].sort((a, b) => b.buffaloLitres - a.b
 
 // ---------- Incentive model ----------
 export const ELASTICITY = 0.0014; // extra buffalo supply share per Rs/kg fat of premium
-export const CAP_SHARE = 0.5; // board cap: incentive cost <= 50% of value gained
+export const CAP_SHARE = 1; // board cap: break-even, incentive cost <= value gained from the extra milk
 export const FAIRNESS_MIN = 0.7; // each size group gets at least 70% of its member share
 
 export function incentiveImpact(asOf: string, rate: number, ids: number[]) {
@@ -132,7 +156,9 @@ export function incentiveImpact(asOf: string, rate: number, ids: number[]) {
     extraValue += (withExtra.totalValue - base.totalValue) * days;
     mixGain += (base.totalValue - current.totalValue) * days;
   }
-  const valueGained = extraValue + mixGain;
+  // Value gained counts only what the premium causes (the extra buffalo milk).
+  // The mix gain happens with or without a premium, so it is reported separately.
+  const valueGained = extraValue;
   const groups: SizeGroup[] = ['small', 'medium', 'large'];
   const totalMembers = SOCIETIES.reduce((x, s) => x + s.members, 0);
   const chosenBuf = chosen.reduce((x, s) => x + s.buffaloLitres, 0) || 1;

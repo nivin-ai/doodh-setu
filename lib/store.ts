@@ -20,7 +20,11 @@ export interface Consent {
 }
 // data_sharing_logs: actual sharing events, kept separate from consent
 export interface SharingLog { id: string; uuid?: string; consentId: string; recipient: string; categories: string[]; purpose: string; status: 'initiated' | 'completed' | 'failed'; at: string }
-export interface Query { id: string; text: string; lang: Lang; at: string; reply?: string; status: 'open' | 'resolved' }
+export interface QueryMsg { from: 'farmer' | 'society'; text: string; at: string }
+// status: 'open' = waiting for the society, 'resolved' = the society has replied
+export interface Query { id: string; text: string; lang: Lang; at: string; reply?: string; status: 'open' | 'resolved'; messages?: QueryMsg[]; farmerSeen?: boolean }
+// Older saved queries have only text and reply; build the thread from those.
+export const threadOf = (q: Query): QueryMsg[] => q.messages ?? [{ from: 'farmer', text: q.text, at: q.at }, ...(q.reply ? [{ from: 'society' as const, text: q.reply, at: q.at }] : [])];
 export interface Application {
   ref: string; uuid?: string; product: string; lender: string; amount: number; tenure: number; rate: number; status: AppStatus;
   history: { status: AppStatus; at: string; note: string }[];
@@ -48,6 +52,8 @@ interface State {
   setFarmer: (p: Partial<State['farmer']>) => void;
   addQuery: (text: string, lang: Lang) => void;
   replyQuery: (id: string, reply: string) => void;
+  followUpQuery: (id: string, text: string) => void;
+  markRepliesSeen: () => void;
   grantConsent: (c: Omit<Consent, 'id' | 'grantedAt' | 'status'>) => string;
   withdrawConsent: (id: string) => void;
   submitApplication: (a: Omit<Application, 'ref' | 'status' | 'history' | 'docs' | 'sharing'>) => void;
@@ -79,8 +85,10 @@ export const useStore = create<State>()(
       log: (actor, action) => set({ audit: [{ at: now(), actor, action }, ...get().audit].slice(0, 200) }),
       setIncentive: (p) => set({ incentive: { ...get().incentive, ...p } }),
       setFarmer: (p) => set({ farmer: { ...get().farmer, ...p } }),
-      addQuery: (text, lang) => set({ queries: [{ id: 'Q' + (get().queries.length + 101), text, lang, at: now(), status: 'open' }, ...get().queries] }),
-      replyQuery: (id, reply) => set({ queries: get().queries.map((q) => (q.id === id ? { ...q, reply, status: 'resolved' } : q)) }),
+      addQuery: (text, lang) => { const at = now(); set({ queries: [{ id: 'Q' + (get().queries.length + 101), text, lang, at, status: 'open', messages: [{ from: 'farmer', text, at }], farmerSeen: true }, ...get().queries] }); },
+      replyQuery: (id, reply) => set({ queries: get().queries.map((q) => (q.id === id ? { ...q, reply, status: 'resolved', farmerSeen: false, messages: [...threadOf(q), { from: 'society', text: reply, at: now() }] } : q)) }),
+      followUpQuery: (id, text) => set({ queries: get().queries.map((q) => (q.id === id ? { ...q, status: 'open', farmerSeen: true, messages: [...threadOf(q), { from: 'farmer', text, at: now() }] } : q)) }),
+      markRepliesSeen: () => { if (get().queries.some((q) => q.farmerSeen === false)) set({ queries: get().queries.map((q) => ({ ...q, farmerSeen: true })) }); },
       grantConsent: (c) => {
         const id = 'C' + (get().consents.length + 1).toString().padStart(3, '0');
         const rec: Consent = { ...c, id, uuid: uuid(), grantedAt: now(), status: 'active' };

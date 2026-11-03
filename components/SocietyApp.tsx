@@ -1,7 +1,7 @@
 'use client';
 import { useState } from 'react';
 import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
-import { useStore } from '@/lib/store';
+import { useStore, threadOf } from '@/lib/store';
 import { DEMO_DATES, FARMER, PREMIUM_PERIOD } from '@/lib/demo';
 import { LANGS, signalMessage, type Lang } from '@/lib/i18n';
 import { worthToFarmer } from '@/lib/farmer';
@@ -72,6 +72,13 @@ function Overview({ go }: { go: (v: string) => void }) {
   );
 }
 
+type SendSlot = 'evening' | 'morning' | 'both';
+const SEND_SLOTS: { id: SendSlot; label: string; when: string; why: string }[] = [
+  { id: 'evening', label: 'Evening', when: 'Tomorrow, 7:30 PM (after evening collection)', why: 'Members are home and more likely to listen to the full voice call and discuss it with the family.' },
+  { id: 'morning', label: 'Morning', when: 'Tomorrow, 8:00 AM (after morning collection)', why: 'Arrives right after members see their morning litres and fat, but mornings are busy with fodder and field work.' },
+  { id: 'both', label: 'Both', when: 'Tomorrow, 8:00 AM, with a 7:30 PM reminder', why: 'The evening reminder goes only to members who did not open the message or answer the call in the morning.' },
+];
+
 function Targets() {
   const s = useStore();
   const inc = s.incentive;
@@ -79,6 +86,7 @@ function Targets() {
   const [concern, setConcern] = useState('');
   const [showConcern, setShowConcern] = useState(false);
   const [justSent, setJustSent] = useState(false);
+  const [sendAt, setSendAt] = useState<SendSlot>('evening');
   const worth = worthToFarmer(DEMO_DATES[s.demoDate].date, inc.rate);
   if (inc.status === 'none' || inc.status === 'submitted' || inc.status === 'rejected') {
     return (<div><PageTitle title="Targets and incentives" /><div className="rounded-sheet border border-dashed border-line p-10 text-center text-muted">No approved targets from the union yet. {inc.status === 'submitted' ? 'A proposal is awaiting union approval.' : ''}</div></div>);
@@ -128,7 +136,6 @@ function Targets() {
       </div>
       <div className="card mt-4 p-4">
         <div className="font-bold">Local note (optional)</div>
-        <p className="text-xs text-muted">Reviewed templates exist in 10 languages; the cards above are the languages your members use. Gnani.ai provides voice, not translation. Write the note in each language, or leave the other languages blank to send the template only.</p>
         <div className="mt-3 grid gap-3 lg:grid-cols-3">
           {langs.map((l) => (
             <label key={l.id} className="block text-sm"><span className="font-bold">{l.name}</span>
@@ -139,7 +146,11 @@ function Targets() {
       </div>
       <div className="mt-4 grid gap-4 md:grid-cols-2">
         <div className="card p-4 text-sm"><div className="font-bold">Audience</div>All eligible members (412): 298 by app, 114 by voice call (IVR)<br /><span className="text-xs text-muted">Feature-phone members get the same message by voice call at the same time.</span></div>
-        <div className="card p-4 text-sm"><div className="font-bold">Send at</div>Tomorrow, 8:00 AM (after morning collection)</div>
+        <div className="card p-4 text-sm"><div className="font-bold">Send at</div>
+          <div className="mt-2"><Segmented options={SEND_SLOTS.map((x) => ({ id: x.id, label: x.label }))} value={sendAt} onChange={setSendAt} /></div>
+          <div className="mt-2">{SEND_SLOTS.find((x) => x.id === sendAt)!.when}</div>
+          <span className="text-xs text-muted">{SEND_SLOTS.find((x) => x.id === sendAt)!.why}</span>
+        </div>
       </div>
       {showConcern ? (
         <div className="card mt-4 p-4">
@@ -151,7 +162,7 @@ function Targets() {
       ) : null}
       <div className="mt-5 flex justify-between">
         <button className="btn-secondary" onClick={() => setShowConcern(true)}>Raise concern</button>
-        <button className="btn-primary" onClick={() => { setJustSent(true); s.setIncentive({ status: 'published' }); s.log('Society secretary', `Published summer buffalo premium (₹${inc.rate}/kg fat, ${PREMIUM_PERIOD.from} to ${PREMIUM_PERIOD.to}) to 412 members`); }}>Publish to members</button>
+        <button className="btn-primary" onClick={() => { setJustSent(true); s.setIncentive({ status: 'published' }); s.log('Society secretary', `Published summer buffalo premium (₹${inc.rate}/kg fat, ${PREMIUM_PERIOD.from} to ${PREMIUM_PERIOD.to}) to 412 members, sending ${SEND_SLOTS.find((x) => x.id === sendAt)!.when.toLowerCase()}`); }}>Publish to members</button>
       </div>
     </div>
   );
@@ -193,12 +204,22 @@ function Queries() {
         {s.queries.map((q) => (
           <div key={q.id} className="card animate-view-in p-4">
             <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1"><b>{q.id}</b><span>{FARMER.name}</span><Chip>{q.lang.toUpperCase()}</Chip><span className="text-xs text-muted">{new Date(q.at).toLocaleString('en-IN')}</span>
-              <span className="ml-auto"><Chip tone={q.status === 'open' ? 'warn' : 'good'}>{q.status}</Chip></span></div>
-            <p className="indic mt-2">“{q.text}”</p>
-            {q.reply ? <p className="mt-2 animate-pop rounded-lg bg-good-light p-2.5 text-sm">Reply: {q.reply}</p> : (
-              <div className="mt-2 flex gap-2"><input className="input" placeholder="Type a reply (sent to the farmer in their language)" value={reply[q.id] ?? ''} onChange={(e) => setReply({ ...reply, [q.id]: e.target.value })} />
-                <button className="btn-primary" disabled={!reply[q.id]} onClick={() => s.replyQuery(q.id, reply[q.id])}>Send</button></div>
-            )}
+              <span className="ml-auto"><Chip tone={q.status === 'open' ? 'warn' : 'good'}>{q.status === 'open' ? 'waiting for society' : 'replied'}</Chip></span></div>
+            <div className="mt-2 space-y-1.5">
+              {threadOf(q).map((m, i) => (
+                <div key={i} className={`flex ${m.from === 'society' ? 'justify-end' : ''}`}>
+                  <div className={`max-w-[85%] rounded-xl px-3 py-2 text-sm ${m.from === 'society' ? 'bg-good-light' : 'bg-fill'}`}>
+                    <div className="text-[11px] font-semibold text-muted">{m.from === 'society' ? 'Society' : FARMER.name}</div>
+                    <div className="indic">{m.text}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+            {q.status === 'resolved' && q.farmerSeen ? <div className="mt-1 text-right text-[11px] text-muted">Seen by farmer</div> : null}
+            <form className="mt-2 flex gap-2" onSubmit={(e) => { e.preventDefault(); if (reply[q.id]?.trim()) { s.replyQuery(q.id, reply[q.id].trim()); setReply({ ...reply, [q.id]: '' }); } }}>
+              <input className="input" placeholder={q.status === 'open' ? 'Type a reply (sent to the farmer in their language)' : 'Add another reply'} value={reply[q.id] ?? ''} onChange={(e) => setReply({ ...reply, [q.id]: e.target.value })} />
+              <button className="btn-primary" type="submit" disabled={!reply[q.id]?.trim()}>Send</button>
+            </form>
           </div>
         ))}
       </div>

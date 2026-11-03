@@ -1,17 +1,17 @@
 'use client';
 import { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { Bar, BarChart, Cell, ResponsiveContainer, XAxis, YAxis, Tooltip, LabelList } from 'recharts';
-import { useStore, activePremium, type AppStatus } from '@/lib/store';
+import { useStore, activePremium, threadOf, type AppStatus } from '@/lib/store';
 import { DEMO_DATES, FARMER } from '@/lib/demo';
-import { LANGS, LANG_CODE, PHRASES, SIGNAL_NEED, SIGNAL_TITLE, STT_LANGS, signalMessage, t, type Lang } from '@/lib/i18n';
+import { LANGS, PHRASES, SIGNAL_NEED, SIGNAL_TITLE, signalMessage, t, type Lang } from '@/lib/i18n';
 import { dayTotals, explainChange, monthKeysUpTo, monthSummary, worthToFarmer, type MonthSummary } from '@/lib/farmer';
 import { answer } from '@/lib/ask';
-import { browserRecognition, recordWav, speak, stopSpeaking, transcribe, voiceHealth, type Recorder } from '@/lib/voice';
+import { speak } from '@/lib/voice';
 import { buildContext } from '@/lib/askContext';
 import { CREDIT, KYC, NOTICE_VERSION, PROPERTY, CATEGORIES, fin } from '@/lib/finance';
 import { fmtMonth, inr, MONTHS } from '@/lib/util';
-import { Chip, Count, PlayButton, Segmented, Waveform, CHART } from './ui';
-import { IconBack, IconBank, IconCheck, IconChevron, IconHome, IconMic, IconNotice, IconPhone, IconRupee, IconSend, IconUser } from './icons';
+import { Chip, Count, PlayButton, Segmented, CHART } from './ui';
+import { IconBack, IconBank, IconCheck, IconChevron, IconChat, IconHome, IconNotice, IconPhone, IconRupee, IconSend, IconUser } from './icons';
 
 type Tab = 'home' | 'earnings' | 'signals' | 'finance' | 'ask';
 type Sub = null | 'signal' | 'why' | 'income' | 'afford' | 'products' | 'consent' | 'loanConsent' | 'apply' | 'tracker' | 'profile';
@@ -54,6 +54,10 @@ export default function FarmerApp() {
 
   useEffect(() => { if (sub === 'signal' && !s.farmer.heard) s.setFarmer({ heard: true }); }, [sub]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  const unread = s.queries.filter((q) => q.farmerSeen === false).length;
+  const prevUnread = useRef(unread);
+  useEffect(() => { if (unread > prevUnread.current && tab !== 'ask') flash(T('newReplyToast')); prevUnread.current = unread; }, [unread]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const complete = today.endsWith('-30') || today.endsWith('-31');
   const monthKeys = monthKeysUpTo(today, 7);
   const completeKeys = complete ? monthKeys : monthKeys.slice(0, -1);
@@ -63,7 +67,7 @@ export default function FarmerApp() {
 
   const ctx = { s, lang, T, today, premium, months, worth, published, go, setSub, sub, flash, loan, setLoan, whyMonth, setWhyMonth, monthKeys, complete };
   const TABS: { id: Tab; Icon: (p: { size?: number }) => JSX.Element }[] = [
-    { id: 'home', Icon: IconHome }, { id: 'earnings', Icon: IconRupee }, { id: 'signals', Icon: IconNotice }, { id: 'finance', Icon: IconBank }, { id: 'ask', Icon: IconMic },
+    { id: 'home', Icon: IconHome }, { id: 'earnings', Icon: IconRupee }, { id: 'signals', Icon: IconNotice }, { id: 'finance', Icon: IconBank }, { id: 'ask', Icon: IconChat },
   ];
   const tabIndex = TABS.findIndex((x) => x.id === tab);
   const viewKey = `${tab}-${sub ?? 'root'}-${lang}`;
@@ -91,14 +95,14 @@ export default function FarmerApp() {
       {toast ? <div role="status" className="fixed bottom-24 left-1/2 z-30 flex w-[90%] max-w-[380px] -translate-x-1/2 animate-toast-in items-center gap-2 rounded-2xl bg-ink px-4 py-3 text-[15px] text-white shadow-lg"><IconCheck size={18} className="text-marigold" />{toast}</div> : null}
 
       {tab !== 'ask' && !sub ? (
-        <button aria-label={T('ask')} onClick={() => go('ask')} className="fixed bottom-[86px] z-20 flex h-14 w-14 items-center justify-center rounded-full bg-marigold text-ink shadow-[0_8px_20px_-6px_rgba(201,138,0,.7)] transition active:scale-95 sm:absolute" style={{ right: 'max(16px, calc(50% - 195px))' }}><IconMic size={24} /></button>
+        <button aria-label={T('ask')} onClick={() => go('ask')} className="fixed bottom-[86px] z-20 flex h-14 w-14 items-center justify-center rounded-full bg-marigold text-ink shadow-[0_8px_20px_-6px_rgba(201,138,0,.7)] transition active:scale-95 sm:absolute" style={{ right: 'max(16px, calc(50% - 195px))' }}><IconChat size={24} />{unread ? <span className="absolute right-1 top-1 h-3 w-3 rounded-full bg-bad ring-2 ring-white" /> : null}</button>
       ) : null}
 
       <nav className="fixed bottom-0 left-1/2 z-20 w-full max-w-[430px] -translate-x-1/2 border-t border-line bg-white/95 pb-[env(safe-area-inset-bottom)] backdrop-blur sm:absolute sm:max-w-none" aria-label="Main">
         <div className="relative grid grid-cols-5">
           <span className="absolute top-0 h-[3px] w-[20%] rounded-b-full bg-primary transition-transform duration-300 ease-out" style={{ transform: `translateX(${tabIndex * 100}%)` }} />
           {TABS.map(({ id: k, Icon }) => {
-            const dot = k === 'signals' && published && !s.farmer.heard;
+            const dot = (k === 'signals' && published && !s.farmer.heard) || (k === 'ask' && unread > 0);
             const on = tab === k;
             return (
               <button key={k} onClick={() => go(k)} aria-current={on ? 'page' : undefined} className={`relative flex flex-col items-center gap-0.5 pb-2 pt-2.5 text-[12px] transition-colors ${on ? 'font-semibold text-primary' : 'text-muted'}`}>
@@ -564,13 +568,6 @@ function Tracker() {
 
 // ---------------- Ask ----------------
 type Answer = { text: string; bullets?: string[]; ai: boolean; handoff?: boolean; why?: string };
-// Other languages show English until reviewed translations are added.
-const VOICE_ERR: Record<string, Partial<Record<Lang, string>> & { en: string }> = {
-  mic: { en: 'Microphone is blocked. Allow microphone access for this site, then try again.', hi: 'माइक्रोफ़ोन बंद है। इस साइट के लिए माइक्रोफ़ोन की अनुमति दें, फिर कोशिश करें।', gu: 'માઇક્રોફોન બંધ છે. આ સાઇટ માટે માઇક્રોફોનની મંજૂરી આપો, પછી ફરી પ્રયાસ કરો.' },
-  heard: { en: 'Could not hear clearly. Try again or type.', hi: 'साफ़ सुनाई नहीं दिया। फिर से बोलें या लिखें।', gu: 'સ્પષ્ટ સંભળાયું નહીં. ફરી બોલો અથવા લખો.' },
-  switched: { en: 'Gnani voice did not respond, switched to the browser voice. Tap and speak again.', hi: 'Gnani आवाज़ ने जवाब नहीं दिया, ब्राउज़र की आवाज़ पर बदला। फिर से दबाएँ और बोलें।', gu: 'Gnani અવાજે જવાબ ન આપ્યો, બ્રાઉઝર અવાજ પર ફેરવ્યું. ફરી દબાવો અને બોલો.' },
-  none: { en: 'Voice is not available in this browser. Please type, or open the app in Chrome.', hi: 'इस ब्राउज़र में आवाज़ उपलब्ध नहीं है। कृपया लिखें, या Chrome में खोलें।', gu: 'આ બ્રાઉઝરમાં અવાજ ઉપલબ્ધ નથી. કૃપા કરી લખો, અથવા Chrome માં ખોલો.' },
-};
 const AI_LABEL: Partial<Record<Lang, string>> & { en: string } = { en: 'AI answer from your records', hi: 'आपके रिकॉर्ड से AI जवाब', gu: 'તમારા રેકોર્ડ પરથી AI જવાબ' };
 
 function Ask() {
@@ -578,64 +575,27 @@ function Ask() {
   const [q, setQ] = useState('');
   const [said, setSaid] = useState<string | null>(null);
   const [ans, setAns] = useState<Answer | null>(null);
-  const [state, setState] = useState<'idle' | 'listening' | 'working' | 'error'>('idle');
-  const [err, setErr] = useState<string>('heard');
-  const [gnaniOn, setGnaniOn] = useState(false);
-  const [hasBrowser, setHasBrowser] = useState(false);
-  const [forceBrowser, setForceBrowser] = useState(false);
-  const mode: 'gnani' | 'browser' | 'none' = gnaniOn && !forceBrowser && STT_LANGS.includes(lang) ? 'gnani' : hasBrowser ? 'browser' : 'none';
+  const [state, setState] = useState<'idle' | 'working'>('idle');
   const [fb, setFb] = useState<string | null>(null);
-  const rec = useRef<Recorder | null>(null);
   const history = useRef<{ q: string; a: string }[]>([]);
-  useEffect(() => { setHasBrowser(!!browserRecognition()); voiceHealth().then((h) => setGnaniOn(h.gnani)); }, []);
-  const fail = (k: string) => { setErr(k); setState('error'); };
+  const [fresh, setFresh] = useState<string[]>([]);
+  const [follow, setFollow] = useState<Record<string, string>>({});
+  useEffect(() => {
+    const un = s.queries.filter((x) => x.farmerSeen === false).map((x) => x.id);
+    if (un.length) { setFresh((f) => Array.from(new Set([...f, ...un]))); s.markRepliesSeen(); }
+  }, [s.queries]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const run = async (text: string, voice: boolean) => {
+  const run = async (text: string) => {
     setSaid(text); setFb(null); setAns(null); setState('working');
     let a: Answer | null = null, why = 'AI not reachable';
     try {
       const r = await fetch('/api/ask', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ question: text, lang, name: FARMER.first, history: history.current, context: buildContext(today, premium) }) });
       const j = await r.json().catch(() => ({}));
       if (r.ok) { a = { text: j.text, bullets: j.bullets?.length ? j.bullets : undefined, ai: true, handoff: j.handoff }; history.current = [...history.current, { q: text, a: [j.text, ...(j.bullets ?? [])].join(' ') }].slice(-3); }
-      else why = r.status === 501 ? 'AI key not set on the server (GEMINI_API_KEY)' : `AI error: ${String(j.error ?? r.status).slice(0, 120)}`;
+      else why = r.status === 501 ? 'AI key not set on the server (ANTHROPIC_API_KEY)' : `AI error: ${String(j.error ?? r.status).slice(0, 120)}`;
     } catch { /* fall back to rule-based answer */ }
     if (!a) { const f = answer(text, lang, today, premium); a = { text: f.text, bullets: f.bullets, ai: false, handoff: f.intent === 'unknown', why }; }
     setAns(a); setState('idle');
-    if (voice) speak([a.text, ...(a.bullets ?? [])].join('. '), lang);
-  };
-
-  const listenBrowser = () => {
-    const R = browserRecognition();
-    if (!R) { fail('none'); return; }
-    const r = new R(); r.lang = LANG_CODE[lang]; r.interimResults = false; r.maxAlternatives = 1;
-    let got = false;
-    r.onresult = (e) => { got = true; run(e.results[0][0].transcript, true); };
-    r.onerror = () => { if (!got) fail('heard'); };
-    r.onend = () => { if (!got) setState((x) => (x === 'listening' ? (setErr('heard'), 'error') : x)); };
-    rec.current = { stop: () => r.stop() }; r.start();
-  };
-
-  const start = async () => {
-    if (state === 'listening') { rec.current?.stop(); return; }
-    if (state === 'working') return;
-    stopSpeaking();
-    setState('listening');
-    try {
-      if (mode === 'gnani') {
-        rec.current = await recordWav(async (wav) => {
-          if (!wav) { fail('heard'); return; }
-          setState('working');
-          const tx = await transcribe(wav, lang);
-          if (tx.text) { run(tx.text, true); return; }
-          if (tx.error !== 'empty' && browserRecognition()) { setForceBrowser(true); fail('switched'); return; }
-          fail('heard');
-        });
-      } else if (mode === 'browser') listenBrowser();
-      else fail('none');
-    } catch (e) {
-      const name = (e as { name?: string })?.name;
-      fail(name === 'NotAllowedError' || name === 'SecurityError' || name === 'NotFoundError' ? 'mic' : 'heard');
-    }
   };
 
   const full = ans ? [ans.text, ...(ans.bullets ?? [])].join('. ') : '';
@@ -656,19 +616,45 @@ function Ask() {
           <button className={`${ans.handoff ? 'btn-primary' : 'btn-secondary'} mt-3 w-full`} onClick={() => { s.addQuery(said ?? '', lang); flash(T('sentToSociety')); }}>{T('talkPerson')}</button>
         </div>
       ) : null}
+      {s.queries.length ? (
+        <div className="card rounded-sheet p-4">
+          <div className="label">{T('myQuestions')}</div>
+          <div className="mt-2 space-y-3">
+            {s.queries.map((q) => (
+              <div key={q.id} className={`rounded-xl border p-3 ${fresh.includes(q.id) ? 'border-good/50 bg-good-light/40' : 'border-line'}`}>
+                <div className="mb-1.5 flex items-center gap-2">
+                  {fresh.includes(q.id) ? <Chip tone="good">{T('newReply')}</Chip> : <Chip tone={q.status === 'open' ? 'warn' : 'good'}>{q.status === 'open' ? T('waitingReply') : T('replied')}</Chip>}
+                </div>
+                <div className="space-y-1.5">
+                  {threadOf(q).map((m, i) => (
+                    <div key={i} className={`flex ${m.from === 'farmer' ? 'justify-end' : ''}`}>
+                      <div className={`max-w-[85%] rounded-xl px-3 py-2 text-[15px] ${m.from === 'farmer' ? 'bg-primary text-white' : 'bg-fill'}`}>
+                        <div className={`text-[11px] font-semibold ${m.from === 'farmer' ? 'text-white/75' : 'text-muted'}`}>{m.from === 'farmer' ? T('you') : FARMER.society}</div>
+                        <div>{m.text}</div>
+                        {m.from === 'society' ? <div className="mt-1"><PlayButton text={m.text} lang={lang} /></div> : null}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                {q.status === 'resolved' ? (
+                  <form className="mt-2 flex gap-2" onSubmit={(e) => { e.preventDefault(); const v = follow[q.id]?.trim(); if (v) { s.followUpQuery(q.id, v); setFollow({ ...follow, [q.id]: '' }); setFresh((f) => f.filter((x) => x !== q.id)); flash(T('sentToSociety')); } }}>
+                    <input className="input !py-1.5 text-sm" placeholder={T('replyToSociety')} value={follow[q.id] ?? ''} onChange={(e) => setFollow({ ...follow, [q.id]: e.target.value })} />
+                    <button className="btn-quiet" type="submit" aria-label={T('replyToSociety')} disabled={!follow[q.id]?.trim()}><IconSend /></button>
+                  </form>
+                ) : null}
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : null}
       <div className="label pt-1 text-center">{T('suggested')}</div>
       <div className="flex flex-col items-center gap-2">
-        {['sq1', 'sq2', 'sq3', 'sq4'].map((k) => <button key={k} disabled={state === 'working'} onClick={() => run(T(k), false)} className="w-full max-w-[340px] rounded-full border border-line bg-white px-4 py-2 text-[15px] transition hover:border-primary/40 hover:bg-primary-light active:scale-[0.99]">{T(k)}</button>)}
+        {['sq1', 'sq2', 'sq3', 'sq4'].map((k) => <button key={k} disabled={state === 'working'} onClick={() => run(T(k))} className="w-full max-w-[340px] rounded-full border border-line bg-white px-4 py-2 text-[15px] transition hover:border-primary/40 hover:bg-primary-light active:scale-[0.99]">{T(k)}</button>)}
       </div>
-      <form className="flex gap-2 pt-2" onSubmit={(e) => { e.preventDefault(); if (q.trim() && state !== 'working') { run(q.trim(), false); setQ(''); } }}>
+      <form className="flex gap-2 pt-2" onSubmit={(e) => { e.preventDefault(); if (q.trim() && state !== 'working') { run(q.trim()); setQ(''); } }}>
         <input className="input" placeholder={T('typeInstead')} value={q} onChange={(e) => setQ(e.target.value)} />
         <button className="btn-quiet" type="submit" aria-label="Ask"><IconSend /></button>
       </form>
-      <div className="flex flex-col items-center pt-4">
-        <button aria-label={T('tapSpeak')} onClick={start} className={`flex h-[84px] w-[84px] items-center justify-center rounded-full transition ${state === 'listening' ? 'listening bg-primary text-white' : 'bg-marigold text-ink shadow-[0_10px_24px_-10px_rgba(201,138,0,.8)] active:scale-95'}`}>{state === 'listening' ? <Waveform bars={5} className="!h-7 [&>span]:!w-1" color="#fff" /> : <IconMic size={34} />}</button>
-        <div className="mt-2 max-w-[340px] text-center text-sm text-muted">{state === 'listening' ? T('listening') : state === 'working' ? T('thinking') : state === 'error' ? VOICE_ERR[err]?.[lang] ?? VOICE_ERR[err]?.en ?? VOICE_ERR.heard.en : T('tapSpeak')}</div>
-        <div className="mt-1 text-[11px] text-muted">{T('voiceSource')}: {mode === 'gnani' ? 'Gnani.ai' : mode === 'browser' ? 'browser' : 'not available, please type'}</div>
-      </div>
     </div>
   );
 }

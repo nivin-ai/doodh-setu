@@ -16,12 +16,12 @@ Open the apps in separate tabs of the same browser. Demo state is shared through
 
 ## Voice (Gnani.ai)
 
-Speech-to-text and text-to-speech use the Gnani.ai Vachana API through two server routes, so the API key never reaches the browser:
+Text-to-speech (reading answers and messages aloud) uses the Gnani.ai Vachana API through a server route, so the API key never reaches the browser. Voice input is switched off in the farmer app for now; farmers type or tap a suggested question.
 
 - `POST /api/tts` calls `https://api.vachana.ai/api/v1/tts/inference` (voices: Veera for Gujarati, Nalini for Hindi, Kaveri for English, model `timbre-v2.5`)
-- `POST /api/stt` calls `https://api.vachana.ai/stt/v3` (model `prisma-v3.0`, `gu-IN`, `hi-IN`, `en-IN`)
+- `POST /api/stt` (speech-to-text, `https://api.vachana.ai/stt/v3`, model `prisma-v3.0`) is kept but not used by the app
 
-If `GNANI_API_KEY` is not set, the app falls back to the browser's built-in voice (and you can always type questions). Gujarati voices are not available in every browser, so set the key for the real demo.
+If `GNANI_API_KEY` is not set, the app falls back to the browser's built-in voice . Gujarati voices are not available in every browser, so set the key for the real demo.
 
 Optional environment variables: `GNANI_VOICE_GU`, `GNANI_VOICE_HI`, `GNANI_VOICE_EN`, `GNANI_TTS_MODEL`, `GNANI_STT_MODEL`.
 
@@ -29,11 +29,9 @@ Optional environment variables: `GNANI_VOICE_GU`, `GNANI_VOICE_HI`, `GNANI_VOICE
 
 Questions in the Ask tab are answered by an AI model through `/api/ask`. It only uses the farmer's own records and the society's approved advice, which the app sends with each question (`lib/askContext.ts`). If it can't answer from those, it says so and points to "Talk to a person".
 
-Set one key in Vercel (Project, Settings, Environment Variables), then redeploy:
-- `GEMINI_API_KEY` (free tier, get it at https://aistudio.google.com/apikey). Optional `GEMINI_MODEL`, default `gemini-flash-latest`.
-- or `ANTHROPIC_API_KEY`. Optional `ANTHROPIC_MODEL`, default `claude-haiku-5-5`.
+Set `ANTHROPIC_API_KEY` in Vercel (Project, Settings, Environment Variables), then redeploy. Get a key at https://console.anthropic.com. Optional `ANTHROPIC_MODEL`, default `claude-haiku-5-5` (Anthropic's fastest model).
 
-If no key is set, or the AI call fails, the app falls back to the fixed rule-based answers in `lib/ask.ts`. Open `/api/health` to see what is active: `{"gnani":true,"ai":"gemini"}`.
+If no key is set, or the AI call fails, the app falls back to the fixed rule-based answers in `lib/ask.ts`. Open `/api/health` to see what is active: `{"gnani":true,"ai":"claude"}`.
 
 ## Map tiles (demand map)
 
@@ -73,7 +71,7 @@ npm run dev                  # open http://localhost:3000
 
 - `lib/farmer.ts`: daily milk collection for one farmer (3 buffaloes, 1 cow), seasonal yields, fat and SNF, payment at ₹865 per kg fat plus SNF bonus, and an exact breakdown of why the monthly payment changed.
 - `lib/demand.ts`: two years of daily sales for 5 products in Mumbai and Ahmedabad across dealers, quick commerce and Amul Shop, driven by growth, temperature, festivals and weekends. The forecast uses last year's pattern adjusted for growth and temperature, with an 80% range and a 28-day accuracy check.
-- `lib/union.ts`: product-mix plan (highest value per litre first, within demand, capacity, buffalo milk and the liquid milk commitment), the buffalo milk gap, the incentive model (cost, value gained, cap check) and the fairness view by society size.
+- `lib/union.ts`: product-mix plan (buffalo milk goes first to the products that earn most per litre of buffalo milk, within demand, capacity, buffalo milk and the liquid milk commitment), the buffalo milk gap, the incentive model (cost, value gained from the extra milk only, break-even check; the mix gain is reported separately) and the fairness view by society size.
 - `lib/marketing.ts`: Module G. Demand opportunities by product and city from the forecast; a supply check that holds any campaign the product-mix plan cannot supply (for example paneer and curd while buffalo milk is short); campaign value counted as extra milk sold as that product instead of going to powder; results against control areas; farmer segments with a weekly message cap; and the monthly "where your milk goes" story.
 - `lib/ask.ts`: the farmer assistant answers only from approved content and the farmer's own records, in three languages.
 - `lib/i18n.ts`: farmer-facing text in Gujarati, Hindi and English. Starter translations: review with native speakers before field use.
