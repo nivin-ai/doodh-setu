@@ -14,6 +14,7 @@ export const FARMER = {
   memberId: '0412',
   society: 'Anand Milk Society',
   village: 'Bakrol, Anand district',
+  phone: '+91 98250 40412',
   animals: { buffalo: 3, cow: 1 },
 };
 

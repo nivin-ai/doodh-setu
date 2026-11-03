@@ -5,20 +5,11 @@ import { useStore, threadOf } from '@/lib/store';
 import { DEMO_DATES, FARMER, PREMIUM_PERIOD } from '@/lib/demo';
 import { LANGS, signalMessage, type Lang } from '@/lib/i18n';
 import { worthToFarmer } from '@/lib/farmer';
-import { gauss, inr, mulberry32, num } from '@/lib/util';
+import { inr, num } from '@/lib/util';
+import { memberRows, TOTAL_MEMBERS, type MemberRow } from '@/lib/members';
 import { CHART, Chip, ConsoleShell, Count, Note, PageTitle, PlayButton, Segmented, Stat } from './ui';
 import { IconCheck, IconChevron } from './icons';
 
-const MEMBERS = (() => {
-  const r = mulberry32(7);
-  const first = ['Ramila', 'Jashodaben', 'Kantibhai', 'Hansaben', 'Manubhai', 'Bhartiben', 'Dahyabhai', 'Kokilaben', 'Pravinbhai', 'Sharda', 'Ishwarbhai', 'Mina', 'Rekha', 'Bhikhabhai', 'Geeta'];
-  const last = ['Patel', 'Parmar', 'Solanki', 'Chauhan', 'Thakor', 'Rathod', 'Makwana', 'Vaghela'];
-  const list = Array.from({ length: 411 }, (_, i) => {
-    const feature = r() < 0.28;
-    return { id: String(i + 1).padStart(4, '0'), name: `${first[Math.floor(r() * first.length)]} ${last[Math.floor(r() * last.length)]}`, phone: feature ? 'Feature phone (IVR)' : 'Smartphone', lang: (r() < 0.85 ? 'gu' : r() < 0.8 ? 'hi' : 'en') as Lang, litres: Math.max(3, 12 + gauss(r) * 5), heardP: r(), interestedP: r() };
-  });
-  return list;
-})();
 
 export default function SocietyApp() {
   const s = useStore();
@@ -37,11 +28,39 @@ export default function SocietyApp() {
   );
 }
 
-function reach(published: boolean, heardSavita: boolean, intSavita: boolean, apr: boolean) {
+function reach(published: boolean, heardMe: boolean, intMe: boolean, apr: boolean) {
   if (!published) return { heard: 0, interested: 0 };
-  const h = MEMBERS.filter((m) => m.heardP < (apr ? 0.86 : 0.68)).length + (heardSavita ? 1 : 0);
-  const i = MEMBERS.filter((m) => m.interestedP < (apr ? 0.27 : 0.18)).length + (intSavita ? 1 : 0);
-  return { heard: h, interested: i };
+  const rows = memberRows({ published, apr, lang: 'gu', heard: heardMe, interested: intMe });
+  return { heard: rows.filter((m) => m.status !== 'Not heard').length, interested: rows.filter((m) => m.status === 'Interested').length };
+}
+
+const LANG_NAME: Record<string, string> = { gu: 'Gujarati', hi: 'Hindi', en: 'English', mr: 'Marathi', bn: 'Bengali', te: 'Telugu', ta: 'Tamil', kn: 'Kannada', ml: 'Malayalam', or: 'Odia' };
+
+// Interested members as an Excel file, so the secretary can call each one back.
+async function downloadInterested(rows: MemberRow[], o: { rate: number; demoDate: string }) {
+  const { default: writeExcelFile } = await import('write-excel-file/browser');
+  const list = rows.filter((r) => r.status === 'Interested');
+  const H = (v: string) => ({ value: v, fontWeight: 'bold' as const, color: '#FFFFFF', backgroundColor: '#0B5CAD' });
+  const header = ['Member ID', 'Name', 'Mobile number', 'Device', 'Reach by', 'Language', 'Village', 'Buffaloes', 'Cows', 'Avg milk (L/day)', 'Status', 'Called back', 'Notes'].map(H);
+  const data = [header, ...list.map((m) => [
+    { value: m.id }, { value: m.name }, { value: m.mobile }, { value: m.device },
+    { value: m.device === 'Smartphone' ? 'App or call' : 'Voice call' }, { value: LANG_NAME[m.lang] ?? m.lang }, { value: m.village },
+    { value: m.buffaloes, type: Number }, { value: m.cows, type: Number }, { value: Math.round(m.litres * 10) / 10, type: Number, format: '0.0' },
+    { value: m.status }, { value: '' }, { value: '' },
+  ])];
+  const about = [
+    [{ value: 'Interested members', fontWeight: 'bold' as const, fontSize: 14 }],
+    [{ value: 'Society' }, { value: FARMER.society }],
+    [{ value: 'Signal' }, { value: `Lean-season buffalo milk premium, Rs ${o.rate} per kg fat, ${PREMIUM_PERIOD.from} to ${PREMIUM_PERIOD.to}` }],
+    [{ value: 'Members interested' }, { value: list.length, type: Number }],
+    [{ value: 'Data as of' }, { value: o.demoDate }],
+    [{ value: 'How to use' }, { value: 'Call each member back, then fill in the Called back and Notes columns.' }],
+    [{ value: 'Note' }, { value: 'Demo data. Names and phone numbers are made up. Contact details are personal data: share only within the society.' }],
+  ];
+  await writeExcelFile([
+    { data, sheet: 'Interested members', columns: [9, 22, 18, 20, 13, 11, 12, 10, 7, 14, 11, 12, 30].map((width) => ({ width })), stickyRowsCount: 1 },
+    { data: about, sheet: 'About', columns: [{ width: 20 }, { width: 90 }] },
+  ]).toFile(`Interested_members_${FARMER.society.replace(/\s+/g, '_')}_${o.demoDate}.xlsx`);
 }
 
 function Overview({ go }: { go: (v: string) => void }) {
@@ -60,6 +79,12 @@ function Overview({ go }: { go: (v: string) => void }) {
         <Stat label="Members reached" value={published ? `${r.heard} / 412` : '-'} sub={published ? 'Heard the latest signal' : 'No active signal'} />
         <Stat label="Interested" value={published ? r.interested : '-'} sub={published ? 'Asked for follow-up' : ''} />
       </div>
+      {published && r.interested ? (
+        <div className="mt-3 flex flex-wrap items-center gap-3 text-sm">
+          <button className="btn-secondary !min-h-[38px] text-sm" onClick={() => downloadInterested(memberRows({ published, apr, lang: s.lang, heard: s.farmer.heard, interested: s.farmer.interested }), { rate: s.incentive.rate, demoDate: DEMO_DATES[s.demoDate].date })}><IconDownload />Download interested members (Excel)</button>
+          <span className="text-muted">Names, phone numbers and herd size, to call each one back.</span>
+        </div>
+      ) : null}
       <div className="mt-6 max-w-[720px]">
         <h3 className="font-bold">Needs your action</h3>
         <ul className="mt-2 divide-y divide-line overflow-hidden rounded-xl border border-line bg-white">
@@ -171,27 +196,39 @@ function Targets() {
 function Members() {
   const s = useStore();
   const [f, setF] = useState<'all' | 'interested' | 'not' | 'ivr'>('all');
+  const [busy, setBusy] = useState(false);
   const apr = s.demoDate === 'apr';
   const published = s.incentive.status === 'published';
-  const status = (hp: number, ip: number) => !published ? '-' : ip < (apr ? 0.27 : 0.18) ? 'Interested' : hp < (apr ? 0.86 : 0.68) ? 'Heard' : 'Not heard';
-  const rows = [
-    { id: FARMER.memberId, name: FARMER.name, phone: 'Smartphone', lang: s.lang, litres: 16, st: !published ? '-' : s.farmer.interested ? 'Interested' : s.farmer.heard ? 'Heard' : 'Not heard' },
-    ...MEMBERS.slice(0, 60).map((m) => ({ id: m.id, name: m.name, phone: m.phone, lang: m.lang, litres: m.litres, st: status(m.heardP, m.interestedP) })),
-  ].filter((r) => f === 'all' || (f === 'interested' && r.st === 'Interested') || (f === 'not' && r.st === 'Not heard') || (f === 'ivr' && r.phone.startsWith('Feature')));
+  const all = memberRows({ published, apr, lang: s.lang, heard: s.farmer.heard, interested: s.farmer.interested });
+  const nInterested = all.filter((r) => r.status === 'Interested').length;
+  const filtered = all.filter((r) => f === 'all' || (f === 'interested' && r.status === 'Interested') || (f === 'not' && r.status === 'Not heard') || (f === 'ivr' && r.device !== 'Smartphone'));
+  const rows = filtered.slice(0, 80);
+  const dl = async () => { setBusy(true); try { await downloadInterested(all, { rate: s.incentive.rate, demoDate: DEMO_DATES[s.demoDate].date }); } finally { setBusy(false); } };
   return (
     <div>
-      <PageTitle title="Members" sub="412 members. Showing the first 61." />
-      <div className="mb-3"><Segmented options={[{ id: 'all', label: 'All' }, { id: 'interested', label: 'Interested' }, { id: 'not', label: 'Not heard' }, { id: 'ivr', label: 'IVR only' }]} value={f} onChange={(v) => setF(v as typeof f)} /></div>
-      <table className="tbl card w-full overflow-hidden">
-        <thead><tr><th>ID</th><th>Name</th><th>Phone</th><th>Language</th><th>Avg L/day</th><th>Signal status</th></tr></thead>
-        <tbody>{rows.map((r) => (
-          <tr key={r.id} className={r.id === FARMER.memberId ? 'bg-primary-light' : 'hover:bg-alt'}><td>{r.id}</td><td>{r.name}</td><td>{r.phone}</td><td>{r.lang.toUpperCase()}</td><td className="num">{r.litres.toFixed(1)}</td>
-            <td>{r.st === '-' ? <span className="text-muted">-</span> : <Chip tone={r.st === 'Interested' ? 'good' : r.st === 'Heard' ? 'primary' : 'neutral'}>{r.st}</Chip>}</td></tr>
-        ))}</tbody>
-      </table>
+      <PageTitle title="Members" sub={`${TOTAL_MEMBERS} members. ${filtered.length > rows.length ? `Showing the first ${rows.length} of ${filtered.length}.` : `Showing ${filtered.length}.`}`} />
+      <div className="mb-3 flex flex-wrap items-center gap-3">
+        <Segmented options={[{ id: 'all', label: 'All' }, { id: 'interested', label: 'Interested' }, { id: 'not', label: 'Not heard' }, { id: 'ivr', label: 'IVR only' }]} value={f} onChange={(v) => setF(v as typeof f)} />
+        <button className="btn-secondary ml-auto !min-h-[38px] text-sm" disabled={!published || !nInterested || busy} onClick={dl} title={!published ? 'Available once a signal is published' : undefined}>
+          <IconDownload />{busy ? 'Preparing...' : `Download interested (${published ? nInterested : 0}) as Excel`}
+        </button>
+      </div>
+      {!published ? <p className="mb-3 text-sm text-muted">Interest is recorded once a signal is published to members. The download is available then.</p> : null}
+      <div className="card overflow-x-auto">
+        <table className="tbl w-full min-w-[760px]">
+          <thead><tr><th>ID</th><th>Name</th><th>Mobile</th><th>Device</th><th>Language</th><th>Herd</th><th>Avg L/day</th><th>Signal status</th></tr></thead>
+          <tbody>{rows.map((r) => (
+            <tr key={r.id} className={r.isDemoFarmer ? 'bg-primary-light' : 'hover:bg-alt'}><td>{r.id}</td><td>{r.name}<div className="text-xs text-muted">{r.village}</div></td><td className="num whitespace-nowrap">{r.mobile}</td><td className="text-xs">{r.device}</td><td>{r.lang.toUpperCase()}</td><td className="whitespace-nowrap text-xs">{r.buffaloes} buf, {r.cows} cow</td><td className="num">{r.litres.toFixed(1)}</td>
+              <td>{r.status === '-' ? <span className="text-muted">-</span> : <Chip tone={r.status === 'Interested' ? 'good' : r.status === 'Heard' ? 'primary' : 'neutral'}>{r.status}</Chip>}</td></tr>
+          ))}</tbody>
+        </table>
+      </div>
+      <Note>Phone numbers are personal data. They are visible only to the society and are not shared with lenders without the member&apos;s consent.</Note>
     </div>
   );
 }
+
+const IconDownload = () => (<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M12 4v11M7 10l5 5 5-5M5 20h14" /></svg>);
 
 function Queries() {
   const s = useStore();

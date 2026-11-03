@@ -665,7 +665,7 @@ function Profile() {
   return (
     <div className="space-y-3">
       <div className="card rounded-sheet p-4"><div className="font-bold">{FARMER.name}</div><div className="text-sm text-muted">{FARMER.society}, {T('member')} {FARMER.memberId}, {FARMER.village}</div>
-        <div className="text-sm text-muted">{FARMER.animals.buffalo} buffaloes, {FARMER.animals.cow} cow</div></div>
+        <div className="text-sm text-muted">{FARMER.animals.buffalo} buffaloes, {FARMER.animals.cow} cow</div><div className="num text-sm text-muted">{FARMER.phone}</div></div>
       <div className="card rounded-sheet p-4"><div className="label">{T('language')}</div>
         <div className="mt-2 grid grid-cols-2 gap-2">{LANGS.map((l) => <button key={l.id} onClick={() => s.set({ lang: l.id })} aria-pressed={lang === l.id} className={`flex items-center justify-between rounded-xl border px-3.5 py-2 text-left transition-colors ${lang === l.id ? 'border-primary bg-primary text-white' : 'border-line bg-white hover:bg-alt'}`}><span>{l.native}</span>{lang === l.id ? <IconCheck size={16} /> : <span className="text-[12px] text-muted">{l.name}</span>}</button>)}</div>
         <label className="mt-3 flex items-center gap-2 text-sm"><input type="checkbox" checked={s.autoplay} onChange={(e) => s.set({ autoplay: e.target.checked })} /> Play messages aloud automatically</label>
