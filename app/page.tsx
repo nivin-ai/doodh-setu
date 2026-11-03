@@ -3,6 +3,7 @@ import { Fragment } from 'react';
 import Link from 'next/link';
 import { ClientOnly } from '@/components/Providers';
 import { VoiceBadge } from '@/components/ui';
+import WalkingCow from '@/components/WalkingCow';
 import { signOut, useSession } from '@/components/session';
 import { HOME_FOR } from '@/lib/roles';
 import { IconBank, IconChevron, IconDrop, IconNotice } from '@/components/icons';
@@ -172,6 +173,7 @@ function Home() {
         </div>
       </div>
 
+      <WalkingCow />
       <footer className="border-t border-line bg-white">
         <div className="mx-auto max-w-6xl px-5 py-5 text-[13px] leading-relaxed text-muted">
           Student prototype for the Amul (GCMMF) case. All data is synthetic, calibrated to public Indian patterns. Answers and messages are read aloud with Gnani.ai when a key is set on the server, otherwise with the browser&apos;s built-in voice.

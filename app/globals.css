@@ -52,3 +52,19 @@ body { font-family: 'Mukta Vaani', 'Mukta', 'Noto Sans Bengali', 'Noto Sans Telu
 .zone-map path.leaflet-interactive { transition: fill 450ms ease, stroke 200ms ease; }
 .zone-map .leaflet-control-attribution { font-size: 10px; }
 .leaflet-tooltip.zone-tip { border: 0; border-radius: 10px; padding: 6px 10px; font: 13px/1.35 'Mukta Vaani', 'Mukta', system-ui, sans-serif; color: #122030; box-shadow: 0 6px 18px -8px rgba(18,32,48,.45); }
+
+/* Walking cow (landing page) */
+@keyframes cow-walk { 0% { left: 2%; } 48% { left: calc(98% - 92px); } 50% { left: calc(98% - 92px); } 98% { left: 2%; } 100% { left: 2%; } }
+@keyframes cow-face { 0%, 49% { transform: scaleX(1); } 50%, 99% { transform: scaleX(-1); } 100% { transform: scaleX(1); } }
+@keyframes cow-leg { 0%, 100% { transform: rotate(14deg); } 50% { transform: rotate(-14deg); } }
+@keyframes cow-bob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-1.5px); } }
+@keyframes cow-head { 0%, 100% { transform: rotate(0deg); } 50% { transform: rotate(3deg); } }
+@keyframes cow-tail { 0%, 100% { transform: rotate(-8deg); } 50% { transform: rotate(14deg); } }
+.cow-walk { animation: cow-walk 36s linear infinite; }
+.cow-face { animation: cow-face 36s step-end infinite; transform-origin: center; }
+.cow-face svg { overflow: visible; animation: cow-bob 0.9s ease-in-out infinite; }
+.cow-leg-a { animation: cow-leg 0.9s ease-in-out infinite; transform-box: view-box; }
+.cow-leg-b { animation: cow-leg 0.9s ease-in-out infinite reverse; transform-box: view-box; }
+.cow-head { animation: cow-head 1.8s ease-in-out infinite; transform-box: view-box; }
+.cow-tail { animation: cow-tail 1.4s ease-in-out infinite; transform-box: view-box; }
+@media (prefers-reduced-motion: reduce) { .cow-walk, .cow-face, .cow-leg-a, .cow-leg-b, .cow-head, .cow-tail { animation: none !important; } }
