@@ -1,0 +1,31 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { asSystem, dbMode, migrate } from '@/lib/server/db';
+import { seedDemoData } from '@/lib/server/seed';
+
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
+export const maxDuration = 60;
+
+// One-time database setup for a new Supabase project: applies supabase/migrations and loads the
+// synthetic demo data (skipped if already there). Needs SETUP_KEY in the environment and
+// ?key=<SETUP_KEY> in the URL. Safe to run again: migrations that ran are skipped, and the seed
+// does nothing once the demo union exists. Remove SETUP_KEY afterwards to switch it off.
+export async function GET(req: NextRequest) {
+  const key = process.env.SETUP_KEY;
+  if (!key || req.nextUrl.searchParams.get('key') !== key) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+  if (dbMode() !== 'postgres') return NextResponse.json({ error: 'DATABASE_URL is not set, nothing to set up' }, { status: 400 });
+  const log: string[] = [];
+  const t0 = Date.now();
+  try {
+    await migrate();
+    log.push(`Migrations applied (${Date.now() - t0} ms)`);
+    const seeded = await asSystem((tx) => seedDemoData(tx, { log: (m) => log.push(m) }));
+    log.push(seeded ? `Demo data loaded (${Date.now() - t0} ms total)` : 'Demo data was already present');
+    const counts = await asSystem((tx) => tx.query(`select (select count(*) from societies)::int societies, (select count(*) from farmers)::int farmers,
+      (select count(*) from demand_daily)::int demand_rows, (select count(*) from milk_transactions)::int milk_rows, (select count(*) from app_users)::int staff_accounts`));
+    return NextResponse.json({ ok: true, log, counts: counts[0] });
+  } catch (e) {
+    console.error('[setup]', e);
+    return NextResponse.json({ ok: false, log, error: e instanceof Error ? e.message : String(e) }, { status: 500 });
+  }
+}

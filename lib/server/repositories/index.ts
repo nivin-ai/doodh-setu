@@ -129,7 +129,8 @@ export async function createProgram(tx: Tx, p: { cooperativeId: string; title: s
 export async function updateProgram(tx: Tx, id: string, set: Record<string, unknown>) {
   const keys = Object.keys(set);
   if (!keys.length) return;
-  const rows = await tx.query(`update incentive_programs set ${keys.map((k, i) => `${k} = $${i + 2}`).join(', ')} where program_id = $1 returning program_id`, [id, ...keys.map((k) => set[k])]);
+  // JSON values are passed as text and cast, so both database drivers store them the same way
+  const rows = await tx.query(`update incentive_programs set ${keys.map((k, i) => (k === 'notes' ? `${k} = $${i + 2}::text::jsonb` : `${k} = $${i + 2}`)).join(', ')} where program_id = $1 returning program_id`, [id, ...keys.map((k) => set[k])]);
   if (!rows.length) throw new DbError('Programme not found or not editable by this account', 403);
 }
 export async function getResponse(tx: Tx, programId: string, farmerId: string) {
@@ -199,7 +200,7 @@ export async function createConsent(tx: Tx, farmerId: string, c: Omit<Consent, '
   const code = 'C' + String(n).padStart(3, '0');
   const id = one(await tx.query<{ id: string }>(`insert into consent_records (farmer_id, lender_id, consent_code, recipient_name, consent_purpose, scope, period, consent_status, granted_at,
       collection_categories, consent_notice_version, consent_method, language, statements_confirmed)
-    values ($1,$2,$3,$4,$5,$6,$7,'granted',now(),$8,$9,$10,$11,$12) returning consent_id::text id`,
+    values ($1,$2,$3,$4,$5,$6,$7,'granted',now(),$8::text::jsonb,$9,$10,$11,$12) returning consent_id::text id`,
     [farmerId, c.lenderId, code, c.recipient, c.purpose, c.scope, c.period, JSON.stringify(c.categories ?? []), c.noticeVersion ?? null, c.method ?? 'digital', c.language ?? null, c.statements ?? null]), 'Consent').id;
   return { id, code };
 }
@@ -287,7 +288,7 @@ export async function setDocuments(tx: Tx, id: string, docs: { id: DocId; status
 }
 export async function logSharing(tx: Tx, s: { farmerId: string; applicationId: string; consentId: string; lenderId: string; categories: string[]; purpose: string; ref: string }) {
   await tx.query(`insert into data_sharing_logs (farmer_id, application_id, consent_id, recipient_id, data_categories, purpose, sharing_status, shared_at, reference_id)
-    values ($1,$2,$3,$4,$5,$6,'completed',now(),$7)`, [s.farmerId, s.applicationId, s.consentId, s.lenderId, JSON.stringify(s.categories), s.purpose, s.ref]);
+    values ($1,$2,$3,$4,$5::text::jsonb,$6,'completed',now(),$7)`, [s.farmerId, s.applicationId, s.consentId, s.lenderId, JSON.stringify(s.categories), s.purpose, s.ref]);
 }
 export async function listLenderCases(tx: Tx) {
   return tx.query<Record<string, unknown>>(`select a.application_id::text id, a.application_reference ref, a.loan_purpose product, a.requested_amount amount, a.application_status status,
@@ -296,7 +297,7 @@ export async function listLenderCases(tx: Tx) {
     order by a.is_synthetic, a.submitted_at desc limit 200`);
 }
 export async function logDataAccess(tx: Tx, a: { accessor: string; farmerId: string; lenderId: string; applicationId: string; categories: string[]; purpose: string }) {
-  await tx.query(`insert into data_access_logs (accessor, accessor_role, farmer_id, lender_id, application_id, categories, purpose) values ($1, 'lender', $2, $3, $4, $5, $6)`,
+  await tx.query(`insert into data_access_logs (accessor, accessor_role, farmer_id, lender_id, application_id, categories, purpose) values ($1, 'lender', $2, $3, $4, $5::text::jsonb, $6)`,
     [a.accessor, a.farmerId, a.lenderId, a.applicationId, JSON.stringify(a.categories), a.purpose]);
 }
 export async function lenderName(tx: Tx, id: string) {

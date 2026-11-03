@@ -68,11 +68,11 @@ export async function seedDemoData(tx: Tx, opts: { log?: (m: string) => void } =
     DATA_SOURCES.map((s, i) => [s.id, s.name, s.kind, s.lag, s.grain, s.quality, s.prevQuality, s.note, i]), 'on conflict (source_id) do nothing');
   await insertMany(tx, 'demand_zones', ['zone_id', 'city', 'name', 'latitude', 'longitude', 'demand_weight', 'qcomm_share', 'affluence', 'inland', 'is_synthetic'],
     GEN_ZONES.map((z) => [z.id, z.city, z.name, z.lat, z.lng, z.weight, z.qShare, z.aff, z.inland, true]), 'on conflict (zone_id) do nothing');
-  await insertMany(tx, 'calendar_events', ['name', 'kind', 'starts_on', 'ends_on', 'effects', 'is_synthetic'],
-    EVENTS.map((e) => {
-      const heat = e.from === HEATWAVE.from && e.to === HEATWAVE.to;
-      return [e.name, heat ? 'heatwave' : 'festival', e.from, e.to, JSON.stringify(heat ? { temp_plus: HEATWAVE.plus } : e.effects), true];
-    }));
+  for (const e of EVENTS) {
+    const heat = e.from === HEATWAVE.from && e.to === HEATWAVE.to;
+    await tx.query(`insert into calendar_events (name, kind, starts_on, ends_on, effects, is_synthetic) values ($1, $2, $3, $4, $5::text::jsonb, true)`,
+      [e.name, heat ? 'heatwave' : 'festival', e.from, e.to, JSON.stringify(heat ? { temp_plus: HEATWAVE.plus } : e.effects)]);
+  }
   const G = generateDemand();
   const weather: unknown[][] = [];
   for (const city of Object.keys(G.temps) as (keyof typeof G.temps)[]) {
@@ -214,4 +214,6 @@ export async function resetDemoWorkflow(tx: Tx) {
     or society_id in (select society_id from societies where is_synthetic) or lender_id in (select lender_id from lenders where is_synthetic)`);
   await tx.query(`update farmers set correction_requested_at = null where is_synthetic and correction_requested_at is not null`);
   await seedBackgroundCases(tx);
+  // next application reference continues after the highest one left (DF-10024 after a clean reset)
+  await tx.query(`select setval('loan_application_ref_seq', greatest(10023, coalesce((select max(substring(application_reference from 4)::int) from loan_applications where application_reference ~ '^DF-[0-9]+$'), 0)))`);
 }

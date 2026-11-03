@@ -13,7 +13,7 @@ All three are written to be re-runnable.
 ## Set up a Supabase project
 
 1. Create a project at supabase.com.
-2. Apply the migrations, either:
+2. Apply the migrations and load the demo data. Easiest from Vercel: add `DATABASE_URL`, `AUTH_SECRET` and `SETUP_KEY` (any random string) as environment variables, redeploy, then open `https://<your site>/api/setup?key=<SETUP_KEY>` once. It applies the migrations, loads the demo data and shows the row counts; remove `SETUP_KEY` afterwards. Or:
    - **SQL editor:** paste each file in order (0001, 0002, 0003) and run it, or
    - **From a computer with this repo:** set `DATABASE_URL` (below) and run `npm run db:migrate`.
 3. Load the synthetic demo data: `npm run db:seed` (does nothing if the demo union already exists).
