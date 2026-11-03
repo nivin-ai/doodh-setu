@@ -7,10 +7,10 @@ import { useStore } from '@/lib/store';
 import { DEMO_DATES, type DemoDateKey } from '@/lib/demo';
 
 const APPS = [
-  { href: '/farmer', title: 'Farmer app', who: 'Savitaben, member of Anand Milk Society', desc: 'Voice-first app in Gujarati, Hindi and English: milk, earnings, signals, DairyFin finance, ask by voice.' },
-  { href: '/society', title: 'Society dashboard', who: 'Rameshbhai, society secretary', desc: 'Receive approved targets, publish messages in three languages, track members and answer queries.' },
-  { href: '/planner', title: 'Planner console', who: 'Priya (planner) and Mr Shah (approver)', desc: 'One screen: demand forecast, product mix, milk gap and incentive with approval, and results.' },
-  { href: '/lender', title: 'Lender desk (DairyFin)', who: 'Anita, case officer at a demo partner bank', desc: 'Review consented income evidence, request documents and update application status.' },
+  { href: '/farmer', title: 'Farmer app', who: 'Farmer, member of Anand Milk Society', desc: 'Voice-first app in Gujarati, Hindi and English: milk, earnings, signals, DairyFin finance, ask by voice.' },
+  { href: '/society', title: 'Society dashboard', who: 'Society secretary', desc: 'Receive approved targets, publish messages in three languages, track members and answer queries.' },
+  { href: '/planner', title: 'Planner console', who: 'Planner and approver', desc: 'One screen: demand forecast, product mix, milk gap and incentive with approval, and results.' },
+  { href: '/lender', title: 'Lender desk (DairyFin)', who: 'Lender (case officer at a demo partner bank)', desc: 'Review consented income evidence, request documents and update application status.' },
 ];
 
 const STEPS: { d: DemoDateKey; app: string; text: string }[] = [

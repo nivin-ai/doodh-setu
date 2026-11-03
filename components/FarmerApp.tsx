@@ -131,7 +131,7 @@ function Home() {
   return (
     <div className="space-y-3.5">
       <div className="pt-1">
-        <div className="font-display text-[26px] font-bold leading-tight">{T('namaste')}, {FARMER.first}</div>
+        <div className="font-display text-[26px] font-bold leading-tight">{T('namaste')}</div>
         <div className="text-[14px] text-muted">{FARMER.society}, {T('member')} {FARMER.memberId}</div>
       </div>
 
@@ -231,7 +231,7 @@ function SignalDetail() {
       {s.farmer.interested ? (
         <div className={`flex items-center justify-center gap-2 rounded-xl border border-good/40 bg-good-light p-3 font-semibold text-good ${justSent ? 'animate-pop' : ''}`}><IconCheck animate={justSent} />{T('interestedDone')}</div>
       ) : (
-        <button className="btn-primary w-full !min-h-[54px] text-[17px]" onClick={() => { setJustSent(true); s.setFarmer({ interested: true }); s.log('Savitaben (farmer)', 'Marked interested in the summer buffalo premium'); }}>{T('interested')}</button>
+        <button className="btn-primary w-full !min-h-[54px] text-[17px]" onClick={() => { setJustSent(true); s.setFarmer({ interested: true }); s.log('Farmer', 'Marked interested in the summer buffalo premium'); }}>{T('interested')}</button>
       )}
       <div className="grid grid-cols-2 gap-2">
         <button className="btn-secondary" onClick={() => go('ask')}>{T('askQ')}</button>

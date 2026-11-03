@@ -31,7 +31,7 @@ export default function SocietyApp() {
     { id: 'members', label: 'Members' }, { id: 'queries', label: 'Queries', badge: openQ }, { id: 'reports', label: 'Reports' },
   ];
   return (
-    <ConsoleShell title="Society dashboard" place={FARMER.society} menu={menu} active={view} onSelect={setView} right={<span className="rounded-full bg-white/10 px-3 py-1">Rameshbhai, secretary</span>}>
+    <ConsoleShell title="Society dashboard" place={FARMER.society} menu={menu} active={view} onSelect={setView} right={<span className="rounded-full bg-white/10 px-3 py-1">Society secretary</span>}>
       {view === 'overview' ? <Overview go={setView} /> : view === 'targets' ? <Targets /> : view === 'members' ? <Members /> : view === 'queries' ? <Queries /> : <Reports />}
     </ConsoleShell>
   );
@@ -103,7 +103,7 @@ function Targets() {
       </div>
     );
   }
-  // Languages this society's members use (Savitaben's own choice included); templates exist for all ten
+  // Languages this society's members use (this farmer's own choice included); templates exist for all ten
   const langs = LANGS.filter((l) => ['gu', 'hi', 'en', s.lang].includes(l.id));
   return (
     <div>
@@ -120,7 +120,7 @@ function Targets() {
               <p className="indic mt-2 text-sm">{msg}</p>
               {note ? <p className="indic mt-2 animate-view-in rounded-lg bg-marigold-soft p-2 text-sm">{note}</p> : null}
               <div className="mt-2 flex items-center gap-1 text-[12px] font-semibold text-good"><IconCheck size={14} />Template reviewed</div>
-              <Note>Personal figure shown for {FARMER.first}; each member hears their own amount.</Note>
+              <Note>Personal figure shown for this farmer; each member hears their own amount.</Note>
               </div>
             </div>
           );
@@ -146,12 +146,12 @@ function Targets() {
           <div className="font-bold">Raise a concern with the union</div>
           <textarea className="input mt-2 h-20" value={concern} onChange={(e) => setConcern(e.target.value)} placeholder="e.g. Many of our members have no buffalo; the target is too high." />
           <div className="mt-2 flex gap-2"><button className="btn-quiet" onClick={() => setShowConcern(false)}>Cancel</button>
-            <button className="btn-primary" disabled={!concern.trim()} onClick={() => { s.setIncentive({ status: 'concern', concern }); s.log('Rameshbhai (society)', `Raised concern: ${concern}`); }}>Send concern</button></div>
+            <button className="btn-primary" disabled={!concern.trim()} onClick={() => { s.setIncentive({ status: 'concern', concern }); s.log('Society secretary', `Raised concern: ${concern}`); }}>Send concern</button></div>
         </div>
       ) : null}
       <div className="mt-5 flex justify-between">
         <button className="btn-secondary" onClick={() => setShowConcern(true)}>Raise concern</button>
-        <button className="btn-primary" onClick={() => { setJustSent(true); s.setIncentive({ status: 'published' }); s.log('Rameshbhai (society)', `Published summer buffalo premium (₹${inc.rate}/kg fat, ${PREMIUM_PERIOD.from} to ${PREMIUM_PERIOD.to}) to 412 members`); }}>Publish to members</button>
+        <button className="btn-primary" onClick={() => { setJustSent(true); s.setIncentive({ status: 'published' }); s.log('Society secretary', `Published summer buffalo premium (₹${inc.rate}/kg fat, ${PREMIUM_PERIOD.from} to ${PREMIUM_PERIOD.to}) to 412 members`); }}>Publish to members</button>
       </div>
     </div>
   );

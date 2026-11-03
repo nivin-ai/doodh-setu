@@ -7,7 +7,7 @@ A working prototype of Doodh Setu, a demand-to-farmer intelligence platform for 
 | App | URL | Who |
 |---|---|---|
 | Demo home | `/` | Demo script, demo date switch, reset |
-| Farmer app | `/farmer` | Savitaben, a member farmer (Gujarati, Hindi, English, voice) |
+| Farmer app | `/farmer` | A member farmer (Gujarati, Hindi, English, voice) |
 | Society dashboard | `/society` | Society secretary |
 | Planner console | `/planner` | Union planner, approver and marketing manager (Marketing menu) |
 | Lender desk (DairyFin) | `/lender` | Bank case officer |

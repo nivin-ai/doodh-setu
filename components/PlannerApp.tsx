@@ -18,7 +18,7 @@ const pill = (on: boolean) => `rounded-full border px-3 py-1 text-sm transition-
 const axis = { tickLine: false, axisLine: false, fontSize: 11, stroke: '#5B6275' } as const;
 const ASOF = DEMO_DATES['mar'].date;
 
-const USERS = { planner: 'Priya (planner)', approver: 'Mr Shah (approver)' };
+const USERS = { planner: 'Planner', approver: 'Approver' };
 
 export default function PlannerApp() {
   const s = useStore();

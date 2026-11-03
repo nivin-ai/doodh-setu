@@ -26,7 +26,7 @@ export default function LenderApp() {
   const newCount = ownCase && ownCase.status === 'submitted' ? 1 : 0;
   const menu = [{ id: 'cases', label: 'Cases', badge: newCount }, { id: 'products', label: 'Products' }, { id: 'audit', label: 'Audit trail' }];
   return (
-    <ConsoleShell title="DairyFin PartnerDesk" place={LENDER} menu={menu} active={view} onSelect={(v) => { setView(v); setOpen(null); }} right={<span className="rounded-full bg-white/10 px-3 py-1">Anita, case officer</span>}>
+    <ConsoleShell title="DairyFin PartnerDesk" place={LENDER} menu={menu} active={view} onSelect={(v) => { setView(v); setOpen(null); }} right={<span className="rounded-full bg-white/10 px-3 py-1">Case officer</span>}>
       {view === 'cases' ? (open ? <CaseDetail refId={open} back={() => setOpen(null)} /> : <Cases onOpen={setOpen} />) : view === 'products' ? <Products /> : <Audit />}
     </ConsoleShell>
   );
@@ -68,7 +68,7 @@ function CaseDetail({ refId, back }: { refId: string; back: () => void }) {
   }, [today, premium?.rate]); // eslint-disable-line react-hooks/exhaustive-deps
   if (!a || a.ref !== refId) {
     const r = SEEDED.find((x) => x.ref === refId);
-    return <div><button className="mb-3 flex items-center gap-1 text-sm font-semibold text-primary hover:underline" onClick={back}><IconBack size={16} />All cases</button><PageTitle title={`Case ${refId}`} chip={r ? <Chip tone={TONE[r.status]}>{LABEL[r.status]}</Chip> : undefined} /><div className="rounded-sheet border border-dashed border-line p-8 text-muted">Background demo case. Open {FARMER.first}&apos;s case to try the full flow.</div></div>;
+    return <div><button className="mb-3 flex items-center gap-1 text-sm font-semibold text-primary hover:underline" onClick={back}><IconBack size={16} />All cases</button><PageTitle title={`Case ${refId}`} chip={r ? <Chip tone={TONE[r.status]}>{LABEL[r.status]}</Chip> : undefined} /><div className="rounded-sheet border border-dashed border-line p-8 text-muted">Background demo case. Open the farmer&apos;s case to try the full flow.</div></div>;
   }
   const consent = s.consents.find((c) => c.id === a.consentId);
   const active = consent?.status === 'active';

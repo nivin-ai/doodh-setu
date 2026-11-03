@@ -85,14 +85,14 @@ export const useStore = create<State>()(
         const id = 'C' + (get().consents.length + 1).toString().padStart(3, '0');
         const rec: Consent = { ...c, id, uuid: uuid(), grantedAt: now(), status: 'active' };
         set({ consents: [rec, ...get().consents] });
-        get().log('Savitaben (farmer)', `Granted consent ${id} to ${c.recipient} for "${c.purpose}"${c.noticeVersion ? ` (notice ${c.noticeVersion})` : ''}`);
+        get().log('Farmer', `Granted consent ${id} to ${c.recipient} for "${c.purpose}"${c.noticeVersion ? ` (notice ${c.noticeVersion})` : ''}`);
         syncFinance({ type: 'consent', consent: rec });
         return id;
       },
       withdrawConsent: (id) => {
         const at = now();
         set({ consents: get().consents.map((c) => (c.id === id ? { ...c, status: 'withdrawn', withdrawnAt: at } : c)) });
-        get().log('Savitaben (farmer)', `Withdrew consent ${id}`);
+        get().log('Farmer', `Withdrew consent ${id}`);
         const c = get().consents.find((x) => x.id === id);
         if (c?.uuid) syncFinance({ type: 'withdraw', consentUuid: c.uuid, at });
       },
@@ -105,7 +105,7 @@ export const useStore = create<State>()(
           docs: [{ id: 'kyc', status: lc ? 'received' : 'missing' }, { id: 'land', status: lc ? 'received' : 'missing' }, { id: 'credit', status: lc ? 'received' : 'missing' }, { id: 'id', status: 'received' }, { id: 'bank', status: 'received' }, { id: 'quote', status: 'missing' }],
         };
         set({ application: app });
-        get().log('Savitaben (farmer)', `Submitted application ${app.ref} to ${a.lender}`);
+        get().log('Farmer', `Submitted application ${app.ref} to ${a.lender}`);
         syncFinance({ type: 'application', application: app, loanConsentUuid: lc?.uuid ?? null });
         if (sharing.length) get().log('DairyFin', `Shared ${sharing[0].categories.join(', ')} with ${a.lender} under consent ${sharing[0].consentId} (${sharing[0].id})`);
       },
@@ -113,17 +113,17 @@ export const useStore = create<State>()(
         const a = get().application; if (!a) return;
         set({ application: { ...a, status: s, history: [...a.history, { status: s, at: now(), note }] } });
         if (a.uuid) syncFinance({ type: 'status', applicationUuid: a.uuid, status: s, at: now() });
-        get().log('Anita (lender)', `Set ${a.ref} to ${s}${note ? ': ' + note : ''}`);
+        get().log('Lender', `Set ${a.ref} to ${s}${note ? ': ' + note : ''}`);
       },
       requestDoc: () => {
         const a = get().application; if (!a) return;
         set({ application: { ...a, status: 'more_info', docs: a.docs.map((d) => (d.id === 'quote' ? { ...d, status: 'requested' } : d)), history: [...a.history, { status: 'more_info', at: now(), note: 'Please upload a cattle purchase quote' }] } });
-        get().log('Anita (lender)', `Requested cattle purchase quote on ${a.ref}`);
+        get().log('Lender', `Requested cattle purchase quote on ${a.ref}`);
       },
       uploadDoc: () => {
         const a = get().application; if (!a) return;
         set({ application: { ...a, status: 'in_review', docs: a.docs.map((d) => (d.id === 'quote' ? { ...d, status: 'received' } : d)), history: [...a.history, { status: 'in_review', at: now(), note: 'Document received; back in review' }] } });
-        get().log('Savitaben (farmer)', `Uploaded cattle purchase quote for ${a.ref}`);
+        get().log('Farmer', `Uploaded cattle purchase quote for ${a.ref}`);
       },
       reset: () => set({ ...initial, incentive: { ...initial.incentive, ids: [...SUGGESTED_IDS] } }),
     }),
