@@ -17,6 +17,8 @@
   },
   "dependencies": {
     "@electric-sql/pglite": "0.4.6",
+    "jspdf": "2.5.2",
+    "jspdf-autotable": "3.8.4",
     "leaflet": "1.9.4",
     "next": "14.2.15",
     "postgres": "3.4.9",

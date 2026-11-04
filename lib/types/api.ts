@@ -92,7 +92,7 @@ export interface PlannerDataset {
 }
 export interface PlannerWorkflow { program: ProgramView | null; audit: AuditEvent[]; acceptedPlans: { month: string; kind: 'recommended' | 'adjusted'; acceptedBy: string }[] }
 
-export interface LenderCaseRow { id: string; ref: string; farmer: string; product: string; amount: number; status: AppStatus; updated: string; background: boolean }
+export interface LenderCaseRow { id: string; ref: string; farmer: string; product: string; amount: number; status: AppStatus; updated: string; background: boolean; submitted: string | null; consent: 'active' | 'withdrawn' | 'none'; dossierGenerated: boolean }
 export interface LenderData { lender: { id: string; name: string }; cases: LenderCaseRow[]; products: LoanProduct[]; audit: AuditEvent[] }
 export interface LenderCase {
   application: Application;
@@ -101,6 +101,20 @@ export interface LenderCase {
   kyc: KycRecord[] | null; property: PropertyRecord | null; credit: CreditRecord | null;
   income: { key: string; total: number; litres: number }[] | null;
   background: boolean;
+  dossier?: LoanDossier;
+}
+// Everything the bank-ready loan PDF needs, read from existing records only (never invented).
+// null means "Not provided": either not in Amul Setu or not covered by the farmer's consent.
+export interface LoanDossier {
+  asOf: string;
+  lenderName: string;
+  applicant: { name: string | null; code: string | null; dob: string | null; gender: string | null; mobile: string | null; mobileVerified: boolean | null };
+  address: { village: string | null; taluka: string | null; district: string | null; state: string | null; pincode: string | null } | null;
+  cooperative: { society: string | null; societyCode: string | null; union: string | null; memberSince: string | null };
+  cattle: { buffalo: number; cow: number; estimatedDailyYield: number } | null;
+  submittedAt: string | null;
+  consentStatements: string[] | null; // the statements the farmer confirmed in the app, for the recorded notice version
+  generatedCount: number; // dossier PDFs generated earlier for this application (audit trail)
 }
 
 export interface DemoState { incentive: string; farmerInterested: boolean; application: string; openQueries: number; db: 'postgres' | 'pglite' }

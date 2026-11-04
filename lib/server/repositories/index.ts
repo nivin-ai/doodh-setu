@@ -292,9 +292,29 @@ export async function logSharing(tx: Tx, s: { farmerId: string; applicationId: s
 }
 export async function listLenderCases(tx: Tx) {
   return tx.query<Record<string, unknown>>(`select a.application_id::text id, a.application_reference ref, a.loan_purpose product, a.requested_amount amount, a.application_status status,
-      a.last_updated_at, a.is_synthetic, f.farmer_code, s.name society
+      a.last_updated_at, a.submitted_at, a.is_synthetic, f.farmer_code, f.society_id::text society_id, s.name society, c.consent_status,
+      exists (select 1 from audit_events e where e.entity_type = 'loan_dossier' and e.entity_id = a.application_id) dossier_generated
     from loan_applications a left join farmers f on f.farmer_id = a.farmer_id left join societies s on s.society_id = f.society_id
+    left join consent_records c on c.consent_id = a.consent_id
     order by a.is_synthetic, a.submitted_at desc limit 200`);
+}
+// Personal details for the loan dossier. Row-level security applies: the farmer row needs any
+// consent to this lender, the address needs identity_kyc consent.
+export async function dossierApplicant(tx: Tx, farmerId: string, applicationId: string) {
+  const f = (await tx.query<Record<string, unknown>>(`select f.farmer_code, coalesce(f.display_name, concat_ws(' ', f.first_name, f.middle_name, f.last_name)) n, f.date_of_birth::text dob, f.gender,
+      f.mobile_number, f.mobile_verified, f.registration_date::text reg, f.society_id::text society_id, s.name society, s.code society_code, c.name union_name
+    from farmers f left join societies s on s.society_id = f.society_id left join cooperatives c on c.cooperative_id = f.cooperative_id where f.farmer_id = $1`, [farmerId]))[0];
+  const a = (await tx.query<Record<string, unknown>>(`select village, taluka, district, state, pincode from farmer_addresses where farmer_id = $1 order by is_primary desc nulls last limit 1`, [farmerId]))[0];
+  const app = (await tx.query<Record<string, unknown>>(`select submitted_at from loan_applications where application_id = $1`, [applicationId]))[0];
+  const gen = (await tx.query<{ n: number }>(`select count(*)::int n from audit_events where entity_type = 'loan_dossier' and entity_id = $1`, [applicationId]))[0];
+  const s = (v: unknown) => (v === null || v === undefined || v === '' ? null : String(v));
+  return {
+    farmer: f ? { name: s(f.n), code: s(f.farmer_code), dob: s(f.dob), gender: s(f.gender), mobile: s(f.mobile_number), mobileVerified: f.mobile_verified === null ? null : Boolean(f.mobile_verified),
+      societyId: s(f.society_id), society: s(f.society), societyCode: s(f.society_code), union: s(f.union_name), memberSince: f.reg ? String(f.reg).slice(0, 10) : null } : null,
+    address: a ? { village: s(a.village), taluka: s(a.taluka), district: s(a.district), state: s(a.state), pincode: s(a.pincode) } : null,
+    submittedAt: app?.submitted_at ? iso(app.submitted_at) : null,
+    generatedCount: n0(gen?.n),
+  };
 }
 export async function logDataAccess(tx: Tx, a: { accessor: string; farmerId: string; lenderId: string; applicationId: string; categories: string[]; purpose: string }) {
   await tx.query(`insert into data_access_logs (accessor, accessor_role, farmer_id, lender_id, application_id, categories, purpose) values ($1, 'lender', $2, $3, $4, $5::text::jsonb, $6)`,
@@ -366,4 +386,12 @@ export async function acceptPlan(tx: Tx, p: { cooperativeId: string; month: stri
 export async function acceptedPlans(tx: Tx, cooperativeId: string) {
   return (await tx.query<{ m: string; k: 'recommended' | 'adjusted'; by: string }>(`select plan_month::text m, kind k, accepted_by by from production_plans
     where cooperative_id = $1 and status = 'accepted' and kind <> 'baseline' order by plan_month`, [cooperativeId])).map((r) => ({ month: r.m, kind: r.k, acceptedBy: r.by }));
+}
+
+// Society names and codes are not personal data; read with the server's rights so a lender sees
+// which society an applicant belongs to (the societies table itself is union and society staff only).
+export async function societyNames(tx: Tx, ids: string[]) {
+  if (!ids.length) return new Map<string, { name: string; code: string }>();
+  const rows = await tx.query<{ id: string; name: string; code: string }>('select society_id::text id, name, code from societies where society_id::text = any($1)', [ids]);
+  return new Map(rows.map((r) => [r.id, { name: r.name, code: r.code }]));
 }
