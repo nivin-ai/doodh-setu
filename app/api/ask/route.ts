@@ -39,15 +39,42 @@ function parse(raw: string) {
   } catch { return null; }
 }
 
+// Indian-language answers need far more tokens than English (Gujarati and Hindi script), and the
+// model's hidden reasoning used most of the old 1024-token limit, so longer Gujarati and Hindi answers
+// were cut off and fell back to the scripted reply. Reasoning is off (answers are short and grounded in
+// the facts; this is also about 3x faster) and the limit has headroom. ANTHROPIC_THINKING=on restores it.
 async function claude(key: string, sys: string, user: string) {
-  const r = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'x-api-key': key, 'anthropic-version': '2023-06-01' },
-    body: JSON.stringify({ model: process.env.ANTHROPIC_MODEL || 'claude-haiku-5-5', max_tokens: 1024, system: sys, messages: [{ role: 'user', content: user }] }),
-  });
-  const j = await r.json().catch(() => ({}));
+  const call = async (noThinking: boolean) => {
+    const r = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-api-key': key, 'anthropic-version': '2023-06-01' },
+      body: JSON.stringify({
+        model: process.env.ANTHROPIC_MODEL || 'claude-haiku-5-5', max_tokens: 2048,
+        ...(noThinking ? { thinking: { type: 'disabled' } } : {}),
+        system: sys, messages: [{ role: 'user', content: user }],
+      }),
+    });
+    const j = await r.json().catch(() => ({}));
+    return { r, j };
+  };
+  const off = process.env.ANTHROPIC_THINKING !== 'on';
+  let { r, j } = await call(off);
+  // a model that does not accept the thinking setting: try once without it
+  if (!r.ok && off && r.status === 400 && /thinking/i.test(JSON.stringify(j))) ({ r, j } = await call(false));
   if (!r.ok) throw new Error(`Claude ${r.status}: ${JSON.stringify(j).slice(0, 300)}`);
-  return (j?.content ?? []).map((c: { text?: string }) => c.text ?? '').join('');
+  const text = (j?.content ?? []).map((c: { type?: string; text?: string }) => (c.type === 'text' ? c.text ?? '' : '')).join('');
+  return { text, stop: String(j?.stop_reason ?? '') };
+}
+
+// If an answer is still cut off, keep the complete sentences of "text" rather than failing
+function salvage(raw: string) {
+  const m = raw.match(/"text"\s*:\s*"((?:[^"\\]|\\.)*)/);
+  if (!m) return null;
+  let t = m[1];
+  try { t = JSON.parse(`"${t}"`); } catch { t = t.replace(/\\n/g, ' ').replace(/\\"/g, '"'); }
+  const cut = Math.max(...['.', '।', '?', '!'].map((p) => t.lastIndexOf(p)));
+  t = (cut > 20 ? t.slice(0, cut + 1) : t).trim();
+  return t ? { text: t, bullets: [] as string[], handoff: false } : null;
 }
 
 export async function POST(req: NextRequest) {
@@ -59,9 +86,9 @@ export async function POST(req: NextRequest) {
   const user = `FACTS:\n${String(context ?? '').slice(0, 8000)}\n\n${past ? `EARLIER IN THIS CONVERSATION:\n${past}\n\n` : ''}FARMER NOW ASKS: ${question.trim()}`;
   const sys = system(lang ?? 'gu', String(name ?? '').slice(0, 60));
   try {
-    const raw = await claude(a, sys, user);
-    const out = parse(raw);
-    if (!out) return NextResponse.json({ error: 'Could not read AI answer', raw: raw.slice(0, 300) }, { status: 502 });
+    const { text: raw, stop } = await claude(a, sys, user);
+    const out = parse(raw) ?? (stop === 'max_tokens' ? salvage(raw) : null);
+    if (!out) return NextResponse.json({ error: `Could not read AI answer${stop === 'max_tokens' ? ' (answer too long)' : ''}`, raw: raw.slice(0, 300) }, { status: 502 });
     return NextResponse.json({ ...out, source: 'claude' });
   } catch (e) {
     return NextResponse.json({ error: String(e instanceof Error ? e.message : e) }, { status: 502 });
