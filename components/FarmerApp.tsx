@@ -10,12 +10,12 @@ import { DEMO_DATES } from '@/lib/demo';
 import { LANGS, PHRASES, SIGNAL_NEED, SIGNAL_TITLE, signalMessage, t, type Lang } from '@/lib/i18n';
 import { dayTotals, explainChange, monthKeysUpTo, monthSummary, worthToFarmer, type MonthSummary } from '@/lib/farmer';
 import { answer } from '@/lib/ask';
-import { speak } from '@/lib/voice';
+import { recordWav, speak, stopSpeaking, transcribe, type Recorder } from '@/lib/voice';
 import { buildContext } from '@/lib/askContext';
 import { NOTICE_VERSION, CATEGORIES, fin } from '@/lib/finance';
 import { fmtMonth, inr, MONTHS } from '@/lib/util';
 import { Chip, Count, PlayButton, Segmented, CHART } from './ui';
-import { IconBack, IconBank, IconCheck, IconChevron, IconChat, IconHome, IconNotice, IconPhone, IconRupee, IconSend, IconUser } from './icons';
+import { IconBack, IconBank, IconCheck, IconChevron, IconChat, IconHome, IconMic, IconNotice, IconPhone, IconRupee, IconSend, IconUser } from './icons';
 
 type Tab = 'home' | 'earnings' | 'signals' | 'finance' | 'ask';
 type Sub = null | 'signal' | 'why' | 'income' | 'afford' | 'products' | 'consent' | 'loanConsent' | 'apply' | 'tracker' | 'profile';
@@ -635,6 +635,10 @@ function Ask() {
   const history = useRef<{ q: string; a: string }[]>([]);
   const [fresh, setFresh] = useState<string[]>([]);
   const [follow, setFollow] = useState<Record<string, string>>({});
+  const [mic, setMic] = useState<'idle' | 'listening' | 'transcribing'>('idle');
+  const [micErr, setMicErr] = useState<string | null>(null);
+  const rec = useRef<Recorder | null>(null);
+  useEffect(() => () => rec.current?.stop(), []);
   useEffect(() => {
     const un = s.queries.filter((x) => x.farmerSeen === false).map((x) => x.id);
     if (un.length) { setFresh((f) => Array.from(new Set([...f, ...un]))); s.markRepliesSeen(); }
@@ -651,6 +655,24 @@ function Ask() {
     } catch { /* fall back to rule-based answer */ }
     if (!a) { const f = answer(SESS, text, lang, today, premium); a = { text: f.text, bullets: f.bullets, ai: false, handoff: f.intent === 'unknown', why }; }
     setAns(a); setState('idle');
+  };
+
+  // Voice question: record (stops on 1.8 s of silence, a second tap, or 15 s), transcribe with Gemini, then ask
+  const tapMic = async () => {
+    if (mic === 'listening') { rec.current?.stop(); return; }
+    if (mic !== 'idle' || state === 'working') return;
+    stopSpeaking(); setMicErr(null);
+    try {
+      rec.current = await recordWav(async (wav) => {
+        rec.current = null;
+        if (!wav) { setMic('idle'); setMicErr(T('notHeard')); return; }
+        setMic('transcribing');
+        const r = await transcribe(wav, lang);
+        setMic('idle');
+        if (r.text) run(r.text); else setMicErr(T('notHeard'));
+      });
+      setMic('listening');
+    } catch { setMic('idle'); setMicErr(T('micBlocked')); }
   };
 
   const full = ans ? [ans.text, ...(ans.bullets ?? [])].join('. ') : '';
@@ -705,6 +727,15 @@ function Ask() {
       <div className="label pt-1 text-center">{T('suggested')}</div>
       <div className="flex flex-col items-center gap-2">
         {['sq1', 'sq2', 'sq3', 'sq4'].map((k) => <button key={k} disabled={state === 'working'} onClick={() => run(T(k))} className="w-full max-w-[340px] rounded-full border border-line bg-white px-4 py-2 text-[15px] transition hover:border-primary/40 hover:bg-primary-light active:scale-[0.99]">{T(k)}</button>)}
+      </div>
+      <div className="flex flex-col items-center gap-2 pt-4">
+        <button type="button" onClick={tapMic} disabled={mic === 'transcribing' || state === 'working'} aria-label={mic === 'listening' ? T('listening') : T('tapSpeak')}
+          className={`relative grid h-20 w-20 place-items-center rounded-full text-white shadow-lg transition active:scale-95 disabled:opacity-60 ${mic === 'listening' ? 'bg-bad' : 'bg-primary hover:bg-primary-dark'}`}>
+          {mic === 'listening' ? <span className="absolute inset-0 animate-ping rounded-full bg-bad/40" /> : null}
+          <IconMic size={34} className="relative" />
+        </button>
+        <div className="text-[15px] font-semibold text-muted" aria-live="polite">{mic === 'listening' ? T('listening') : mic === 'transcribing' ? T('thinking') : T('tapSpeak')}</div>
+        {micErr ? <div className="max-w-[320px] text-center text-sm text-warn">{micErr}</div> : null}
       </div>
       <form className="flex gap-2 pt-2" onSubmit={(e) => { e.preventDefault(); if (q.trim() && state !== 'working') { run(q.trim()); setQ(''); } }}>
         <input className="input" placeholder={T('typeInstead')} value={q} onChange={(e) => setQ(e.target.value)} />

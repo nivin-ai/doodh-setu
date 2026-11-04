@@ -2,7 +2,7 @@
 import { LANG_CODE, type Lang } from './i18n';
 
 // ---------- Capability check ----------
-let health: Promise<{ gnani: boolean }> | null = null;
+let health: Promise<{ gnani: boolean; stt?: string | null }> | null = null;
 export function voiceHealth() {
   if (!health) health = fetch('/api/health').then((r) => r.json()).catch(() => ({ gnani: false }));
   return health;
@@ -46,7 +46,7 @@ export async function speak(text: string, lang: Lang, onEnd?: () => void): Promi
   return 'none';
 }
 
-// ---------- Recording to 16 kHz mono WAV (Gnani STT accepts WAV) ----------
+// ---------- Recording to 16 kHz mono WAV (sent to Gemini speech to text) ----------
 function encodeWav(samples: Float32Array, rate: number) {
   const buf = new ArrayBuffer(44 + samples.length * 2);
   const v = new DataView(buf);
@@ -121,7 +121,7 @@ export async function transcribe(wav: Blob, lang: Lang): Promise<{ text: string 
   try {
     const r = await fetch('/api/stt', { method: 'POST', body: fd });
     const j = await r.json().catch(() => ({}));
-    if (!r.ok) return { text: null, error: `Gnani STT ${j?.status ?? r.status}` };
+    if (!r.ok) return { text: null, error: `STT ${r.status}: ${String(j?.detail ?? j?.error ?? '').slice(0, 120)}` };
     const t = String(j.transcript ?? '').trim();
     return t ? { text: t } : { text: null, error: 'empty' };
   } catch { return { text: null, error: 'network' }; }

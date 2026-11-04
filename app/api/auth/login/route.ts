@@ -4,6 +4,9 @@ import { asSystem } from '@/lib/server/db';
 import { findStaffUser } from '@/lib/server/repositories/users';
 
 export const runtime = 'nodejs';
+// Allows time to switch to the local demo database if Supabase cannot be reached (lib/server/db.ts)
+export const maxDuration = 60;
+
 
 // Staff sign-in against app_users (scrypt password hashes). The cookie carries the user's scope ids,
 // which the server turns into the database scope for each request (lib/server/auth.ts).

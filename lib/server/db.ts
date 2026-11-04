@@ -31,13 +31,49 @@ export class DbError extends Error {
   constructor(message: string, readonly status = 500) { super(message); }
 }
 
-const g = globalThis as unknown as { __dsDriver?: Promise<Driver> };
+const g = globalThis as unknown as { __dsDriver?: Promise<Driver>; __dsStandby?: Promise<Driver>; __dsFallback?: FallbackInfo; __dsPg?: Promise<Driver> };
+
+// ---------------------------------------------------------------------------------------------
+// Safe fallback. If DATABASE_URL is set but Supabase cannot be reached (network blocked, pooler
+// down, project paused, wrong host, password changed, schema not set up), the server switches to
+// the local demo database (PGlite) with the same migrations and the same seed, instead of
+// showing "The database is not reachable". Ids in the seed are stable, so existing sign-in
+// cookies keep working after the switch. The switch is sticky for this server process: restart
+// the server to try Supabase again. GET /api/health shows which database is in use and why.
+//   DB_FALLBACK=off   never fall back (errors are shown instead)
+//   DB_STANDBY=on|off prepare the local database in the background at start-up so a switch is
+//                     instant. Default: on when running on your computer, off on Vercel.
+// ---------------------------------------------------------------------------------------------
+export interface FallbackInfo { since: string; reason: string }
+const fallbackAllowed = () => (process.env.DB_FALLBACK ?? '').toLowerCase() !== 'off';
+const standbyWanted = () => {
+  const v = (process.env.DB_STANDBY ?? '').toLowerCase();
+  return v ? v === 'on' || v === 'true' || v === '1' : !process.env.VERCEL;
+};
+const PROBE_MS = Number(process.env.DB_PROBE_TIMEOUT_MS || 6000);
+
+// Errors that mean "cannot talk to the database", as opposed to a bad query or a refused permission
+const CONNECTION_CODES = new Set(['ECONNREFUSED', 'ENOTFOUND', 'EAI_AGAIN', 'ETIMEDOUT', 'ECONNRESET', 'EHOSTUNREACH', 'ENETUNREACH', 'EPIPE', 'ECONNABORTED',
+  'CONNECT_TIMEOUT', 'CONNECTION_CLOSED', 'CONNECTION_ENDED', 'CONNECTION_DESTROYED', 'SASL_SIGNATURE_MISMATCH',
+  '28P01', '28000', '3D000', '53300', '57P01', '57P02', '57P03', 'XX000']);
+export function isConnectionError(e: unknown): boolean {
+  const err = e as { code?: string; errno?: string; message?: string } | null;
+  const code = String(err?.code ?? err?.errno ?? '');
+  if (CONNECTION_CODES.has(code) || code.startsWith('08')) return true;
+  return /tenant or user not found|connection terminated|timeout exceeded when trying to connect|self[- ]signed certificate|certificate|getaddrinfo|socket hang up|server closed the connection|too many connections|max client connections|password authentication failed|db probe timed out/i.test(String(err?.message ?? ''));
+}
+const describe = (e: unknown) => {
+  const err = e as { code?: string; message?: string };
+  // never include the connection string or password
+  return [err?.code, String(err?.message ?? e).replace(/postgres(ql)?:\/\/\S+/gi, '<connection string>')].filter(Boolean).join(': ').slice(0, 300);
+};
 
 async function postgresDriver(url: string): Promise<Driver> {
   const { default: postgres } = await import('postgres');
   const local = /localhost|127\.0\.0\.1/.test(url);
-  // prepare: false works with Supabase's transaction pooler (port 6543)
-  const sql = postgres(url, { prepare: false, max: 3, idle_timeout: 20, ssl: local ? false : 'require' });
+  // prepare: false works with Supabase's transaction pooler (port 6543).
+  // connect_timeout keeps a blocked network from hanging a request for 30 s (the library default).
+  const sql = postgres(url, { prepare: false, max: 3, idle_timeout: 20, connect_timeout: Number(process.env.DB_CONNECT_TIMEOUT_S || 5), ssl: local ? false : 'require', onnotice: () => undefined });
   return {
     kind: 'postgres',
     transaction: (fn) => sql.begin((t) => fn({
@@ -64,19 +100,85 @@ async function pgliteDriver(): Promise<Driver> {
   return driver;
 }
 
-export function dbMode(): 'postgres' | 'pglite' { return process.env.DATABASE_URL ? 'postgres' : 'pglite'; }
+// The local demo database, created once per server process (shared by the fallback and by
+// "no DATABASE_URL" mode).
+function standby(): Promise<Driver> {
+  if (!g.__dsStandby) g.__dsStandby = pgliteDriver().catch((e) => { g.__dsStandby = undefined; throw e; });
+  return g.__dsStandby;
+}
+
+function switchToFallback(reason: unknown) {
+  if (!g.__dsFallback) {
+    g.__dsFallback = { since: new Date().toISOString(), reason: describe(reason) };
+    console.warn(`[db] Supabase not reachable (${g.__dsFallback.reason}). Switched to the local demo database for this server process.`);
+  }
+  g.__dsDriver = standby();
+  return g.__dsDriver;
+}
+
+// Supabase with a safety net: every transaction that fails because the database cannot be
+// reached is retried once on Supabase, then run on the local demo database.
+function resilient(pg: Driver): Driver {
+  return {
+    kind: 'postgres',
+    async transaction(fn) {
+      if (g.__dsFallback) return (await standby()).transaction(fn);
+      try { return await pg.transaction(fn); }
+      catch (e) {
+        if (!isConnectionError(e) || !fallbackAllowed()) throw e;
+        try { return await pg.transaction(fn); }
+        catch (e2) {
+          if (!isConnectionError(e2)) throw e2;
+          return (await switchToFallback(e2)).transaction(fn);
+        }
+      }
+    },
+  };
+}
+
+// Supabase only, never the fallback (setup route and maintenance scripts).
+export function postgresOnly(): Promise<Driver> {
+  const url = process.env.DATABASE_URL;
+  if (!url) return Promise.reject(new DbError('DATABASE_URL is not set', 400));
+  if (!g.__dsPg) g.__dsPg = postgresDriver(url).catch((e) => { g.__dsPg = undefined; throw e; });
+  return g.__dsPg;
+}
+
+// Checks once, at start-up, that Supabase answers and has the schema. Any failure -> fallback.
+async function connect(url: string): Promise<Driver> {
+  void url;
+  const pg = await postgresOnly();
+  if (!fallbackAllowed()) return pg;
+  if (standbyWanted()) standby().catch((e) => console.error('[db] local standby database failed to start', e));
+  try {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    await Promise.race([
+      pg.transaction((tx) => tx.query('select 1 from app_users limit 1')),
+      new Promise((_, rej) => { timer = setTimeout(() => rej(new Error('DB probe timed out')), PROBE_MS); }),
+    ]).finally(() => clearTimeout(timer));
+    return resilient(pg);
+  } catch (e) {
+    return switchToFallback(e);
+  }
+}
+
+// 'postgres' while Supabase is in use, 'pglite' for the local demo database (also after a fallback)
+export function dbMode(): 'postgres' | 'pglite' { return process.env.DATABASE_URL && !g.__dsFallback ? 'postgres' : 'pglite'; }
+export function dbStatus() {
+  return { mode: dbMode(), configured: process.env.DATABASE_URL ? 'postgres' : 'pglite', fallback: g.__dsFallback ?? null, fallbackEnabled: fallbackAllowed() };
+}
 
 export function driver(): Promise<Driver> {
   if (!g.__dsDriver) {
     const url = process.env.DATABASE_URL;
-    g.__dsDriver = (url ? postgresDriver(url) : pgliteDriver()).catch((e) => { g.__dsDriver = undefined; throw e; });
+    g.__dsDriver = (url ? connect(url) : standby()).catch((e) => { g.__dsDriver = undefined; throw e; });
   }
   return g.__dsDriver;
 }
 
 // Applies migrations that have not run yet (used for the local database and by scripts/db.ts).
-export async function migrate(d?: Driver) {
-  const drv = d ?? (await driver());
+export async function migrate(d?: Driver | Promise<Driver>) {
+  const drv = (await d) ?? (await driver());
   await drv.transaction(async (tx) => {
     await tx.query('create table if not exists schema_migrations (name text primary key, applied_at timestamptz not null default now())');
     const done = new Set((await tx.query<{ name: string }>('select name from schema_migrations')).map((r) => r.name));
@@ -103,8 +205,9 @@ export async function withScope<T>(scope: Scope, fn: (tx: Tx) => Promise<T>): Pr
 
 // Runs fn with the server's own rights (no user scope): sign-in, seeding, demo reset and public
 // aggregate counts only. Never use it to return individual records to a browser.
-export async function asSystem<T>(fn: (tx: Tx) => Promise<T>): Promise<T> {
-  const drv = await driver();
+// strict: Supabase only, never the local fallback (setup and maintenance).
+export async function asSystem<T>(fn: (tx: Tx) => Promise<T>, opts: { strict?: boolean } = {}): Promise<T> {
+  const drv = opts.strict ? await postgresOnly() : await driver();
   return drv.transaction(fn);
 }
 

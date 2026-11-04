@@ -18,8 +18,8 @@ export const LANGS: { id: Lang; native: string; name: string; code: string }[] =
   { id: 'or', native: 'ଓଡ଼ିଆ', name: 'Odia', code: 'or-IN' },
 ];
 export const LANG_CODE = Object.fromEntries(LANGS.map((l) => [l.id, l.code])) as Record<Lang, string>;
-// Gnani speech-to-text covers these; others fall back to the browser or typing
-export const STT_LANGS: Lang[] = ['gu', 'hi', 'en', 'mr', 'bn', 'te', 'ta', 'kn', 'ml'];
+// Gemini speech-to-text covers all app languages
+export const STT_LANGS: Lang[] = ['gu', 'hi', 'en', 'mr', 'bn', 'te', 'ta', 'kn', 'ml', 'or'];
 
 type Dict = Record<string, string>;
 const en: Dict = {
@@ -41,6 +41,7 @@ const en: Dict = {
   whyPremium: 'Why the premium?', whyPremiumText: 'Paneer and curd demand is high this summer, so buffalo milk is worth more to the union.',
   talkSociety: 'Talk to society', statement: 'Monthly statement', litres: 'Litres', base: 'Base amount', snfBonus: 'SNF bonus', premium: 'Premium',
   youSaid: 'You said', tryAgain: 'Not right? Try again', automated: 'Automated answer', talkPerson: 'Talk to a person',
+  notHeard: 'Sorry, I could not hear that. Please tap and speak again.', micBlocked: 'Please allow the microphone to ask by voice.',
   tapSpeak: 'Tap and speak', listening: 'Listening...', thinking: 'Working...', typeInstead: 'Or type your question',
   suggested: 'Suggested questions', sq1: 'Why did my price change?', sq2: 'How can I increase milk in summer?', sq3: 'How much did I earn this month?', sq4: 'What is SNF?',
   myQuestions: 'Your questions to the society', waitingReply: 'Waiting for reply', replied: 'Society replied', newReply: 'New reply', you: 'You', replyToSociety: 'Reply to the society', newReplyToast: 'Your society replied to your question', helpful: 'Was this helpful?', yes: 'Yes', no: 'No', sentToSociety: 'Sent to your society. They will reply soon.',
@@ -85,6 +86,7 @@ const hi: Dict = {
   whyPremium: 'प्रीमियम क्यों?', whyPremiumText: 'इस गर्मी में पनीर और दही की माँग ज़्यादा है, इसलिए भैंस का दूध संघ के लिए ज़्यादा कीमती है।',
   talkSociety: 'मंडली से बात करें', statement: 'मासिक विवरण', litres: 'लीटर', base: 'मूल राशि', snfBonus: 'एसएनएफ बोनस', premium: 'प्रीमियम',
   youSaid: 'आपने कहा', tryAgain: 'सही नहीं? फिर से कोशिश करें', automated: 'स्वचालित जवाब', talkPerson: 'किसी व्यक्ति से बात करें',
+  notHeard: 'माफ़ करें, सुनाई नहीं दिया। फिर से दबाएँ और बोलें।', micBlocked: 'आवाज़ से पूछने के लिए माइक की अनुमति दें।',
   tapSpeak: 'दबाएँ और बोलें', listening: 'सुन रहे हैं...', thinking: 'काम हो रहा है...', typeInstead: 'या अपना सवाल लिखें',
   suggested: 'सुझाए गए सवाल', sq1: 'मेरा भाव क्यों बदला?', sq2: 'गर्मी में दूध कैसे बढ़ाएँ?', sq3: 'इस महीने मैंने कितना कमाया?', sq4: 'एसएनएफ क्या है?',
   myQuestions: 'मंडली से आपके सवाल', waitingReply: 'जवाब का इंतज़ार', replied: 'मंडली ने जवाब दिया', newReply: 'नया जवाब', you: 'आप', replyToSociety: 'मंडली को जवाब दें', newReplyToast: 'आपकी मंडली ने आपके सवाल का जवाब दिया', helpful: 'क्या यह मददगार था?', yes: 'हाँ', no: 'नहीं', sentToSociety: 'मंडली को भेज दिया। वे जल्द जवाब देंगे।',
@@ -129,6 +131,7 @@ const gu: Dict = {
   whyPremium: 'પ્રીમિયમ કેમ?', whyPremiumText: 'આ ઉનાળામાં પનીર અને દહીંની માંગ વધુ છે, તેથી ભેંસનું દૂધ સંઘ માટે વધુ કિંમતી છે.',
   talkSociety: 'મંડળી સાથે વાત કરો', statement: 'માસિક પત્રક', litres: 'લિટર', base: 'મૂળ રકમ', snfBonus: 'એસએનએફ બોનસ', premium: 'પ્રીમિયમ',
   youSaid: 'તમે કહ્યું', tryAgain: 'બરાબર નથી? ફરી પ્રયાસ કરો', automated: 'સ્વચાલિત જવાબ', talkPerson: 'કોઈ વ્યક્તિ સાથે વાત કરો',
+  notHeard: 'માફ કરશો, સંભળાયું નહીં. ફરી દબાવો અને બોલો.', micBlocked: 'અવાજથી પૂછવા માટે માઇકની મંજૂરી આપો.',
   tapSpeak: 'દબાવો અને બોલો', listening: 'સાંભળી રહ્યા છીએ...', thinking: 'કામ ચાલુ છે...', typeInstead: 'અથવા તમારો પ્રશ્ન લખો',
   suggested: 'સૂચવેલા પ્રશ્નો', sq1: 'મારો ભાવ કેમ બદલાયો?', sq2: 'ઉનાળામાં દૂધ કેવી રીતે વધારવું?', sq3: 'આ મહિને મેં કેટલું કમાયું?', sq4: 'એસએનએફ એટલે શું?',
   myQuestions: 'મંડળીને તમારા પ્રશ્નો', waitingReply: 'જવાબની રાહ', replied: 'મંડળીએ જવાબ આપ્યો', newReply: 'નવો જવાબ', you: 'તમે', replyToSociety: 'મંડળીને જવાબ આપો', newReplyToast: 'તમારી મંડળીએ તમારા પ્રશ્નનો જવાબ આપ્યો', helpful: 'શું આ ઉપયોગી હતું?', yes: 'હા', no: 'ના', sentToSociety: 'મંડળીને મોકલ્યું. તેઓ જલ્દી જવાબ આપશે.',

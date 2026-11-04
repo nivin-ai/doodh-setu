@@ -4,6 +4,9 @@ import { body, handle } from '@/lib/server/http';
 import { getLenderCase, getLenderData, lenderAction } from '@/lib/server/services/lender';
 
 export const runtime = 'nodejs';
+// Allows time to switch to the local demo database if Supabase cannot be reached (lib/server/db.ts)
+export const maxDuration = 60;
+
 export const dynamic = 'force-dynamic';
 
 export const GET = (req: NextRequest) => handle(async () => {
