@@ -214,27 +214,77 @@ function Targets() {
   );
 }
 
+type MilkBand = 'all' | 'small' | 'medium' | 'large';
+const MILK_BANDS: { id: MilkBand; label: string; test: (l: number) => boolean }[] = [
+  { id: 'all', label: 'Any amount', test: () => true },
+  { id: 'small', label: 'Under 8 L a day', test: (l) => l < 8 },
+  { id: 'medium', label: '8 to 15 L a day', test: (l) => l >= 8 && l <= 15 },
+  { id: 'large', label: 'Over 15 L a day', test: (l) => l > 15 },
+];
+const LANG_LABEL: Record<string, string> = Object.fromEntries(LANGS.map((l) => [l.id, l.name]));
+const PAGE = 80;
+
 function Members() {
   const { d, asOf } = useSociety();
-  const [f, setF] = useState<'all' | 'interested' | 'not' | 'ivr'>('all');
+  const [f, setF] = useState<'all' | 'interested' | 'heard' | 'not'>('all');
+  const [village, setVillage] = useState('all');
+  const [milk, setMilk] = useState<MilkBand>('all');
+  const [animals, setAnimals] = useState<'all' | 'buffalo' | 'cow'>('all');
+  const [lang, setLang] = useState('all');
+  const [reach, setReach] = useState<'all' | 'app' | 'ivr'>('all');
+  const [q, setQ] = useState('');
+  const [sort, setSort] = useState<'id' | 'milk'>('id');
+  const [limit, setLimit] = useState(PAGE);
   const [busy, setBusy] = useState(false);
   const p = d.program;
   const published = p?.status === 'published';
   const all = d.members;
-  const nInterested = all.filter((r) => r.status === 'Interested').length;
-  const filtered = all.filter((r) => f === 'all' || (f === 'interested' && r.status === 'Interested') || (f === 'not' && r.status === 'Not heard') || (f === 'ivr' && r.device !== 'Smartphone'));
-  const rows = filtered.slice(0, 80);
-  const dl = async () => { setBusy(true); try { await downloadInterested(all, { rate: p!.rate, demoDate: asOf, society: d.society.name, from: p!.from, to: p!.to }); } finally { setBusy(false); } };
+  const count = (key: (r: MemberRow) => string) => all.reduce<Record<string, number>>((a, r) => { a[key(r)] = (a[key(r)] ?? 0) + 1; return a; }, {});
+  const villages = Object.entries(count((r) => r.village)).sort((a, b) => b[1] - a[1]);
+  const langs = Object.entries(count((r) => r.lang)).sort((a, b) => b[1] - a[1]);
+  const band = MILK_BANDS.find((b) => b.id === milk)!;
+  const needle = q.trim().toLowerCase();
+  // everything except the signal status, so the status buttons can show how many each would give
+  const base = all.filter((r) =>
+    (village === 'all' || r.village === village) && band.test(r.litres)
+    && (animals === 'all' || (animals === 'buffalo' ? r.buffaloes > 0 : r.buffaloes === 0 && r.cows > 0))
+    && (lang === 'all' || r.lang === lang) && (reach === 'all' || (reach === 'app') === (r.device === 'Smartphone'))
+    && (!needle || r.name.toLowerCase().includes(needle) || r.code.includes(needle)));
+  const statusOk = (r: MemberRow) => f === 'all' || (f === 'interested' && r.status === 'Interested') || (f === 'heard' && r.status === 'Heard') || (f === 'not' && r.status === 'Not heard');
+  const filtered = base.filter(statusOk).sort((a, b) => (sort === 'milk' ? b.litres - a.litres : a.code.localeCompare(b.code)));
+  const rows = filtered.slice(0, limit);
+  const interestedHere = base.filter((r) => r.status === 'Interested');
+  const nStatus = (st: string) => base.filter((r) => r.status === st).length;
+  const narrowed = village !== 'all' || milk !== 'all' || animals !== 'all' || lang !== 'all' || reach !== 'all' || !!needle;
+  const clear = () => { setVillage('all'); setMilk('all'); setAnimals('all'); setLang('all'); setReach('all'); setQ(''); setF('all'); setLimit(PAGE); };
+  const litres = filtered.reduce((x, r) => x + r.litres, 0);
+  const buffaloes = filtered.reduce((x, r) => x + r.buffaloes, 0);
+  const dl = async () => { setBusy(true); try { await downloadInterested(interestedHere, { rate: p!.rate, demoDate: asOf, society: d.society.name, from: p!.from, to: p!.to }); } finally { setBusy(false); } };
+  const sel = 'input !min-h-[38px] !py-1.5 text-sm';
+  const field = (label: string, el: React.ReactNode) => <label className="flex min-w-[150px] flex-1 flex-col gap-1 text-xs font-semibold text-muted">{label}{el}</label>;
   return (
     <div>
-      <PageTitle title="Members" sub={`${d.society.members} members. ${filtered.length > rows.length ? `Showing the first ${rows.length} of ${filtered.length}.` : `Showing ${filtered.length}.`}`} />
+      <PageTitle title="Members" sub={`${d.society.members} members. Filter to find who to call, then download the interested ones.`} />
+      <div className="card mb-3 p-3">
+        <div className="flex flex-wrap gap-3">
+          {field('Village', <select className={sel} value={village} onChange={(e) => { setVillage(e.target.value); setLimit(PAGE); }}><option value="all">All villages ({all.length})</option>{villages.map(([v, n]) => <option key={v} value={v}>{v} ({n})</option>)}</select>)}
+          {field('Milk per day', <select className={sel} value={milk} onChange={(e) => { setMilk(e.target.value as MilkBand); setLimit(PAGE); }}>{MILK_BANDS.map((b) => <option key={b.id} value={b.id}>{b.label}</option>)}</select>)}
+          {field('Animals', <select className={sel} value={animals} onChange={(e) => { setAnimals(e.target.value as typeof animals); setLimit(PAGE); }}><option value="all">Any</option><option value="buffalo">Has buffalo</option><option value="cow">Cows only</option></select>)}
+          {field('Language', <select className={sel} value={lang} onChange={(e) => { setLang(e.target.value); setLimit(PAGE); }}><option value="all">Any language</option>{langs.map(([l, n]) => <option key={l} value={l}>{LANG_LABEL[l] ?? l} ({n})</option>)}</select>)}
+          {field('Reached by', <select className={sel} value={reach} onChange={(e) => { setReach(e.target.value as typeof reach); setLimit(PAGE); }}><option value="all">App or voice call</option><option value="app">App (smartphone)</option><option value="ivr">Voice call only (IVR)</option></select>)}
+          {field('Search', <input className={sel} placeholder="Name or member ID" value={q} onChange={(e) => { setQ(e.target.value); setLimit(PAGE); }} />)}
+        </div>
+      </div>
       <div className="mb-3 flex flex-wrap items-center gap-3">
-        <Segmented options={[{ id: 'all', label: 'All' }, { id: 'interested', label: 'Interested' }, { id: 'not', label: 'Not heard' }, { id: 'ivr', label: 'IVR only' }]} value={f} onChange={(v) => setF(v as typeof f)} />
-        <button className="btn-secondary ml-auto !min-h-[38px] text-sm" disabled={!published || !nInterested || busy} onClick={dl} title={!published ? 'Available once a signal is published' : undefined}>
-          <IconDownload />{busy ? 'Preparing...' : `Download interested (${published ? nInterested : 0}) as Excel`}
+        <Segmented options={[{ id: 'all', label: `All (${base.length})` }, { id: 'interested', label: `Interested (${nStatus('Interested')})` }, { id: 'heard', label: `Heard (${nStatus('Heard')})` }, { id: 'not', label: `Not heard (${nStatus('Not heard')})` }]} value={f} onChange={(v) => { setF(v as typeof f); setLimit(PAGE); }} />
+        <label className="flex items-center gap-2 text-sm text-muted">Sort<select className="input !min-h-[34px] !w-auto !py-1 text-sm" value={sort} onChange={(e) => setSort(e.target.value as typeof sort)}><option value="id">Member ID</option><option value="milk">Most milk first</option></select></label>
+        {narrowed || f !== 'all' ? <button className="text-sm font-semibold text-primary hover:underline" onClick={clear}>Clear filters</button> : null}
+        <button className="btn-secondary ml-auto !min-h-[38px] text-sm" disabled={!published || !interestedHere.length || busy} onClick={dl} title={!published ? 'Available once a signal is published' : undefined}>
+          <IconDownload />{busy ? 'Preparing...' : `Download ${narrowed ? 'these ' : ''}interested (${published ? interestedHere.length : 0}) as Excel`}
         </button>
       </div>
       {!published ? <p className="mb-3 text-sm text-muted">Interest is recorded once a signal is published to members. The download is available then.</p> : null}
+      <div className="mb-2 text-sm text-muted" aria-live="polite"><b className="text-ink">{filtered.length}</b> member{filtered.length === 1 ? '' : 's'} match{filtered.length === 1 ? 'es' : ''}{filtered.length ? <>, about <b className="text-ink">{Math.round(litres).toLocaleString('en-IN')} L</b> of milk a day from <b className="text-ink">{buffaloes}</b> buffaloes</> : null}.</div>
       <div className="card overflow-x-auto">
         <table className="tbl w-full min-w-[760px]">
           <thead><tr><th>ID</th><th>Name</th><th>Mobile</th><th>Device</th><th>Language</th><th>Herd</th><th>Avg L/day</th><th>Signal status</th></tr></thead>
@@ -243,7 +293,9 @@ function Members() {
               <td>{r.status === '-' ? <span className="text-muted">-</span> : <Chip tone={r.status === 'Interested' ? 'good' : r.status === 'Heard' ? 'primary' : 'neutral'}>{r.status}</Chip>}</td></tr>
           ))}</tbody>
         </table>
+        {!filtered.length ? <div className="p-6 text-center text-sm text-muted">No members match these filters. <button className="font-semibold text-primary hover:underline" onClick={clear}>Clear filters</button></div> : null}
       </div>
+      {filtered.length > rows.length ? <div className="mt-3 text-center"><button className="btn-secondary !min-h-[38px] text-sm" onClick={() => setLimit((n) => n + 200)}>Show more ({filtered.length - rows.length} left)</button></div> : null}
       <Note>Phone numbers are personal data. They are visible only to the society and are not shared with lenders without the member&apos;s consent.</Note>
     </div>
   );
