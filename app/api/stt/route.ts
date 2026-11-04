@@ -16,7 +16,7 @@ const prompt = (lang: string) => `Transcribe this short voice question exactly a
 
 The expected language is ${LANG_NAME[lang]}. Farmers often mix in English or Hindi words; keep those words as they are said.
 
-Words you are likely to hear: Amul, mandali / society (doodh mandali), SNF, fat, litre, rate, payment, bonus, premium, paneer, dahi, ghee, buffalo (bhens), cow (gaay), heifer, calving, insemination (AI), vet / doctor, mineral mixture, fodder (chaaro), silage, cattle feed (daan), loan, EMI, bank, KCC, DairyFin, Doodh Setu.
+Words you are likely to hear: Amul, mandali / society (doodh mandali), SNF, fat, litre, rate, payment, bonus, premium, paneer, dahi, ghee, buffalo (bhens), cow (gaay), heifer, calving, insemination (AI), vet / doctor, mineral mixture, fodder (chaaro), silage, cattle feed (daan), loan, EMI, bank, KCC, DairyFin, Amul Setu.
 
 Rules:
 - Output only the transcript text. No quotes, labels, translation or explanation.

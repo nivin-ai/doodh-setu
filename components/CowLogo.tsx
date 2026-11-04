@@ -1,4 +1,4 @@
-// Doodh Setu mark: a friendly cow face on a milk-white tile.
+// Amul Setu mark: a friendly cow face on a milk-white tile.
 export const COW_FACE = (
   <>
     <path d="M17 15.5 q-2.6 -4.6 -6.4 -4.4" fill="none" stroke="#F2BE2C" strokeWidth="2.4" strokeLinecap="round" />

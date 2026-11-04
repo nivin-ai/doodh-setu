@@ -39,7 +39,7 @@ function Login() {
         <div className="mx-auto flex max-w-5xl items-center gap-3 px-5 py-3.5">
           <Link href="/" className="flex items-center gap-3">
             <CowLogo size={36} />
-            <span className="text-[17px] font-semibold tracking-tight">Doodh Setu</span>
+            <span className="text-[17px] font-semibold tracking-tight">Amul Setu</span>
           </Link>
           <Link href="/farmer" className="ml-auto text-[14px] font-semibold text-primary hover:underline">Farmer app</Link>
         </div>

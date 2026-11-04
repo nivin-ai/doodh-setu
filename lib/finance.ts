@@ -40,7 +40,7 @@ const en: FinText = {
     ['How long', 'Until your application is decided, then as long as the bank\'s legal rules require'],
     ['Your rights', 'See what is held about you, ask for corrections, ask for deletion when no longer needed, and name someone to act for you'],
     ['Withdraw', 'Any time in Profile. Withdrawing is as easy as agreeing. It stops further sharing; the bank may stop processing your application'],
-    ['Complaints', 'Grievance officer: grievance@doodhsetu.example (demo). If not resolved, you can complain to the Data Protection Board of India'],
+    ['Complaints', 'Grievance officer: grievance@amulsetu.example (demo). If not resolved, you can complain to the Data Protection Board of India'],
   ],
   agree: 'I agree and continue', tickAll: 'Tick all three boxes to continue', version: 'Notice version',
 };
@@ -67,7 +67,7 @@ const hi: FinText = {
     ['कब तक', 'आवेदन पर फ़ैसला होने तक, फिर बैंक के क़ानूनी नियमों के अनुसार'],
     ['आपके अधिकार', 'अपनी जानकारी देखना, सुधार माँगना, ज़रूरत न रहने पर हटवाना, और किसी को अपनी ओर से नामित करना'],
     ['सहमति वापस लेना', 'प्रोफ़ाइल में कभी भी। यह सहमति देने जितना ही आसान है। इससे आगे साझा करना रुक जाता है; बैंक आवेदन रोक सकता है'],
-    ['शिकायत', 'शिकायत अधिकारी: grievance@doodhsetu.example (डेमो)। हल न होने पर आप भारतीय डेटा संरक्षण बोर्ड से शिकायत कर सकते हैं'],
+    ['शिकायत', 'शिकायत अधिकारी: grievance@amulsetu.example (डेमो)। हल न होने पर आप भारतीय डेटा संरक्षण बोर्ड से शिकायत कर सकते हैं'],
   ],
   agree: 'मैं सहमत हूँ, आगे बढ़ें', tickAll: 'आगे बढ़ने के लिए तीनों बॉक्स पर निशान लगाएँ', version: 'सूचना संस्करण',
 };
@@ -94,7 +94,7 @@ const gu: FinText = {
     ['ક્યાં સુધી', 'અરજીનો નિર્ણય થાય ત્યાં સુધી, પછી બેંકના કાયદાકીય નિયમો મુજબ'],
     ['તમારા અધિકારો', 'તમારી માહિતી જોવી, સુધારો માંગવો, જરૂર ન રહે ત્યારે કાઢી નાખવા કહેવું, અને તમારા વતી કોઈને નિમવા'],
     ['સંમતિ પાછી ખેંચવી', 'પ્રોફાઇલમાં ગમે ત્યારે. તે સંમતિ આપવા જેટલું જ સરળ છે. તેનાથી આગળ શેરિંગ બંધ થાય છે; બેંક અરજી રોકી શકે છે'],
-    ['ફરિયાદ', 'ફરિયાદ અધિકારી: grievance@doodhsetu.example (ડેમો). નિરાકરણ ન થાય તો તમે ભારતના ડેટા પ્રોટેક્શન બોર્ડને ફરિયાદ કરી શકો છો'],
+    ['ફરિયાદ', 'ફરિયાદ અધિકારી: grievance@amulsetu.example (ડેમો). નિરાકરણ ન થાય તો તમે ભારતના ડેટા પ્રોટેક્શન બોર્ડને ફરિયાદ કરી શકો છો'],
   ],
   agree: 'હું સંમત છું, આગળ વધો', tickAll: 'આગળ વધવા ત્રણેય બૉક્સમાં ખરું કરો', version: 'સૂચના આવૃત્તિ',
 };

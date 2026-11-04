@@ -64,7 +64,7 @@ function Home() {
       <header className="border-b border-line bg-white">
         <div className="mx-auto flex max-w-6xl items-center gap-3 px-5 py-3.5">
           <CowLogo size={36} />
-          <span className="text-[17px] font-semibold tracking-tight">Doodh Setu</span>
+          <span className="text-[17px] font-semibold tracking-tight">Amul Setu</span>
           <span className="ml-auto hidden text-[13px] text-muted md:inline">Prototype v0.2, synthetic data</span>
           <span className="hidden sm:inline"><VoiceBadge /></span>
           {user ? (
@@ -82,7 +82,7 @@ function Home() {
           <div className="text-[12px] font-semibold uppercase tracking-[0.14em] text-primary">Demand-to-farmer platform for dairy cooperatives</div>
           <h1 className="mt-3 max-w-[22ch] text-[36px] font-semibold leading-[1.12] tracking-tight sm:text-[44px]">Turn city demand into better prices for dairy farmers.</h1>
           <p className="mt-4 max-w-[62ch] text-[17px] leading-relaxed text-muted">
-            Doodh Setu connects consumer sales data to milk procurement. The union plans the season from live demand, the society relays targets and premiums, and farmers see what their milk is worth, in their own language.
+            Amul Setu connects consumer sales data to milk procurement. The union plans the season from live demand, the society relays targets and premiums, and farmers see what their milk is worth, in their own language.
           </p>
           <div className="mt-6 flex flex-wrap gap-3">
             <Link href={user ? HOME_FOR[user.role] : '/login'} className="btn-primary">{user ? 'Open staff console' : 'Sign in to the staff console'}</Link>

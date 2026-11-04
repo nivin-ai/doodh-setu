@@ -119,7 +119,7 @@ export function ConsoleShell({ title, place, menu, active, onSelect, right, chil
       <header className="flex flex-wrap items-center gap-x-5 gap-y-2 bg-console px-4 py-3 text-white md:px-6">
         <Link href="/" className="flex items-center gap-2.5">
           <CowLogo size={32} className="border-white/30" />
-          <span className="text-[17px] font-semibold tracking-tight">Doodh Setu</span>
+          <span className="text-[17px] font-semibold tracking-tight">Amul Setu</span>
         </Link>
         <span className="hidden text-[14px] text-white/75 sm:inline">{title}{place ? <span className="text-white/55">, {place}</span> : null}</span>
         {mods.length > 1 ? (

@@ -3,7 +3,7 @@
 type Dict = Record<string, string>;
 
 export const mr: Dict = {
-  appName: 'दूध सेतू', namaste: 'नमस्कार', member: 'सभासद',
+  appName: 'अमूल सेतू', namaste: 'नमस्कार', member: 'सभासद',
   home: 'मुख्यपृष्ठ', earnings: 'कमाई', signals: 'संदेश', finance: 'वित्त', ask: 'विचारा',
   todaysMilk: 'आजचे दूध', morning: 'सकाळ', evening: 'संध्याकाळ', today: 'आज',
   goodQuality: 'चांगली गुणवत्ता', checkQuality: 'गुणवत्ता तपासा',
@@ -48,7 +48,7 @@ export const mr: Dict = {
 };
 
 export const ml: Dict = {
-  appName: 'ദൂധ് സേതു', namaste: 'നമസ്കാരം', member: 'അംഗം',
+  appName: 'അമുൽ സേതു', namaste: 'നമസ്കാരം', member: 'അംഗം',
   home: 'ഹോം', earnings: 'വരുമാനം', signals: 'സന്ദേശങ്ങൾ', finance: 'സാമ്പത്തികം', ask: 'ചോദിക്കൂ',
   todaysMilk: 'ഇന്നത്തെ പാൽ', morning: 'രാവിലെ', evening: 'വൈകുന്നേരം', today: 'ഇന്ന്',
   goodQuality: 'നല്ല ഗുണനിലവാരം', checkQuality: 'ഗുണനിലവാരം പരിശോധിക്കുക',
@@ -93,7 +93,7 @@ export const ml: Dict = {
 };
 
 export const bn: Dict = {
-  appName: 'দুধ সেতু', namaste: 'নমস্কার', member: 'সদস্য',
+  appName: 'আমুল সেতু', namaste: 'নমস্কার', member: 'সদস্য',
   home: 'হোম', earnings: 'আয়', signals: 'বার্তা', finance: 'অর্থ', ask: 'জিজ্ঞাসা',
   todaysMilk: 'আজকের দুধ', morning: 'সকাল', evening: 'সন্ধ্যা', today: 'আজ',
   goodQuality: 'ভালো মান', checkQuality: 'মান পরীক্ষা করুন',
@@ -138,7 +138,7 @@ export const bn: Dict = {
 };
 
 export const te: Dict = {
-  appName: 'దూధ్ సేతు', namaste: 'నమస్కారం', member: 'సభ్యులు',
+  appName: 'అమూల్ సేతు', namaste: 'నమస్కారం', member: 'సభ్యులు',
   home: 'హోమ్', earnings: 'ఆదాయం', signals: 'సందేశాలు', finance: 'ఆర్థికం', ask: 'అడగండి',
   todaysMilk: 'ఈరోజు పాలు', morning: 'ఉదయం', evening: 'సాయంత్రం', today: 'ఈరోజు',
   goodQuality: 'మంచి నాణ్యత', checkQuality: 'నాణ్యత చూడండి',
@@ -183,7 +183,7 @@ export const te: Dict = {
 };
 
 export const kn: Dict = {
-  appName: 'ದೂಧ್ ಸೇತು', namaste: 'ನಮಸ್ಕಾರ', member: 'ಸದಸ್ಯ',
+  appName: 'ಅಮುಲ್ ಸೇತು', namaste: 'ನಮಸ್ಕಾರ', member: 'ಸದಸ್ಯ',
   home: 'ಮುಖಪುಟ', earnings: 'ಗಳಿಕೆ', signals: 'ಸಂದೇಶಗಳು', finance: 'ಹಣಕಾಸು', ask: 'ಕೇಳಿ',
   todaysMilk: 'ಇಂದಿನ ಹಾಲು', morning: 'ಬೆಳಿಗ್ಗೆ', evening: 'ಸಂಜೆ', today: 'ಇಂದು',
   goodQuality: 'ಉತ್ತಮ ಗುಣಮಟ್ಟ', checkQuality: 'ಗುಣಮಟ್ಟ ಪರಿಶೀಲಿಸಿ',
@@ -228,7 +228,7 @@ export const kn: Dict = {
 };
 
 export const ta: Dict = {
-  appName: 'தூத் சேது', namaste: 'வணக்கம்', member: 'உறுப்பினர்',
+  appName: 'அமுல் சேது', namaste: 'வணக்கம்', member: 'உறுப்பினர்',
   home: 'முகப்பு', earnings: 'வருமானம்', signals: 'செய்திகள்', finance: 'நிதி', ask: 'கேளுங்கள்',
   todaysMilk: 'இன்றைய பால்', morning: 'காலை', evening: 'மாலை', today: 'இன்று',
   goodQuality: 'நல்ல தரம்', checkQuality: 'தரத்தைச் சரிபார்க்கவும்',
@@ -273,7 +273,7 @@ export const ta: Dict = {
 };
 
 export const or: Dict = {
-  appName: 'ଦୁଧ ସେତୁ', namaste: 'ନମସ୍କାର', member: 'ସଦସ୍ୟ',
+  appName: 'ଅମୁଲ ସେତୁ', namaste: 'ନମସ୍କାର', member: 'ସଦସ୍ୟ',
   home: 'ମୂଳପୃଷ୍ଠା', earnings: 'ରୋଜଗାର', signals: 'ବାର୍ତ୍ତା', finance: 'ଅର୍ଥ', ask: 'ପଚାରନ୍ତୁ',
   todaysMilk: 'ଆଜିର ଦୁଧ', morning: 'ସକାଳ', evening: 'ସନ୍ଧ୍ୟା', today: 'ଆଜି',
   goodQuality: 'ଭଲ ଗୁଣବତ୍ତା', checkQuality: 'ଗୁଣବତ୍ତା ଯାଞ୍ଚ କରନ୍ତୁ',

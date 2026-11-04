@@ -23,7 +23,7 @@ export const STT_LANGS: Lang[] = ['gu', 'hi', 'en', 'mr', 'bn', 'te', 'ta', 'kn'
 
 type Dict = Record<string, string>;
 const en: Dict = {
-  appName: 'Doodh Setu', namaste: 'Namaste', member: 'Member',
+  appName: 'Amul Setu', namaste: 'Namaste', member: 'Member',
   home: 'Home', earnings: 'Earnings', signals: 'Signals', finance: 'Finance', ask: 'Ask',
   todaysMilk: "Today's milk", morning: 'Morning', evening: 'Evening', today: 'today',
   goodQuality: 'Good quality', checkQuality: 'Check quality',
@@ -68,7 +68,7 @@ const en: Dict = {
 };
 
 const hi: Dict = {
-  appName: 'दूध सेतु', namaste: 'नमस्ते', member: 'सदस्य',
+  appName: 'अमूल सेतु', namaste: 'नमस्ते', member: 'सदस्य',
   home: 'होम', earnings: 'कमाई', signals: 'संदेश', finance: 'वित्त', ask: 'पूछें',
   todaysMilk: 'आज का दूध', morning: 'सुबह', evening: 'शाम', today: 'आज',
   goodQuality: 'अच्छी गुणवत्ता', checkQuality: 'गुणवत्ता जाँचें',
@@ -113,7 +113,7 @@ const hi: Dict = {
 };
 
 const gu: Dict = {
-  appName: 'દૂધ સેતુ', namaste: 'નમસ્તે', member: 'સભ્ય',
+  appName: 'અમૂલ સેતુ', namaste: 'નમસ્તે', member: 'સભ્ય',
   home: 'હોમ', earnings: 'કમાણી', signals: 'સંદેશા', finance: 'નાણાં', ask: 'પૂછો',
   todaysMilk: 'આજનું દૂધ', morning: 'સવાર', evening: 'સાંજ', today: 'આજે',
   goodQuality: 'સારી ગુણવત્તા', checkQuality: 'ગુણવત્તા તપાસો',

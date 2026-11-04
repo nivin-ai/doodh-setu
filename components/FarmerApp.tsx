@@ -410,7 +410,7 @@ function Income({ list }: { list: MonthSummary[] }) {
   const total = sel.reduce((x, m) => x + m.total, 0);
   const download = () => {
     const rows = ['month,litres,net_payment_rs,source', ...sel.map((m) => `${m.key},${Math.round(m.litres)},${m.total},simulated collection records`)];
-    const blob = new Blob([`Doodh Setu income report (demo data)\nFarmer: ${FARMER.name}, member ${FARMER.memberId}\nGenerated: ${new Date().toISOString()}\nNot a credit decision.\n\n${rows.join('\n')}`], { type: 'text/csv' });
+    const blob = new Blob([`Amul Setu income report (demo data)\nFarmer: ${FARMER.name}, member ${FARMER.memberId}\nGenerated: ${new Date().toISOString()}\nNot a credit decision.\n\n${rows.join('\n')}`], { type: 'text/csv' });
     const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'income-report-demo.csv'; a.click();
   };
   return (
@@ -767,7 +767,7 @@ function Profile() {
           </div>
         ))}
       </div>
-      <p className="text-xs text-muted">Grievance officer (demo): grievance@doodhsetu.example, Your data stays in India.</p>
+      <p className="text-xs text-muted">Grievance officer (demo): grievance@amulsetu.example, Your data stays in India.</p>
     </div>
   );
 }

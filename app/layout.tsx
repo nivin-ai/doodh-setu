@@ -3,7 +3,7 @@ import './globals.css';
 import Providers from '@/components/Providers';
 
 export const metadata: Metadata = {
-  title: 'Doodh Setu prototype',
+  title: 'Amul Setu prototype',
   description: 'Demand-to-farmer intelligence platform for a dairy cooperative (student prototype, synthetic data).',
 };
 export const viewport: Viewport = { width: 'device-width', initialScale: 1, themeColor: '#084785' };
