@@ -127,10 +127,60 @@ export async function transcribe(wav: Blob, lang: Lang): Promise<{ text: string 
   } catch { return { text: null, error: 'network' }; }
 }
 
-// ---------- Browser speech recognition fallback (Chrome, Edge) ----------
-type SR = { lang: string; interimResults: boolean; maxAlternatives: number; start: () => void; stop: () => void; onresult: ((e: { results: { 0: { 0: { transcript: string } } } }) => void) | null; onerror: (() => void) | null; onend: (() => void) | null };
+// ---------- Browser speech recognition (Chrome, Edge, Android) ----------
+// Free and instant: the browser's own speech service turns speech into text while the farmer is
+// still talking. Used first wherever the browser has it; recordWav + transcribe (Gemini on the
+// server) is the fallback for browsers without it (Firefox, some iPhones) or when it fails.
+interface SRAlt { transcript: string }
+interface SRResult { isFinal: boolean; length: number; [i: number]: SRAlt }
+interface SREvent { resultIndex: number; results: { length: number; [i: number]: SRResult } }
+interface SR {
+  lang: string; interimResults: boolean; continuous: boolean; maxAlternatives: number;
+  start: () => void; stop: () => void; abort: () => void;
+  onresult: ((e: SREvent) => void) | null; onerror: ((e: { error: string }) => void) | null; onend: (() => void) | null;
+}
 export function browserRecognition(): (new () => SR) | null {
   if (typeof window === 'undefined') return null;
   const w = window as unknown as { SpeechRecognition?: new () => SR; webkitSpeechRecognition?: new () => SR };
   return w.SpeechRecognition ?? w.webkitSpeechRecognition ?? null;
+}
+
+// Errors where trying the server transcription instead makes sense (no service, unsupported language,
+// browser blocks the service). "not-allowed" (mic blocked) and "no-speech" are reported as they are.
+const FALLBACK_ERRORS = new Set(['network', 'language-not-supported', 'service-not-allowed', 'audio-capture', 'start-failed']);
+
+export type ListenResult = { text: string } | { text: null; error: 'no-speech' | 'mic-blocked' | 'fallback' | 'aborted'; detail?: string };
+
+// Listens once: shows words live through onInterim, ends by itself when the farmer pauses
+// (or on stop(), or after 15 s) and reports the final text.
+export function listenInBrowser(lang: Lang, onInterim: (text: string) => void, onDone: (r: ListenResult) => void): Recorder | null {
+  const Rec = browserRecognition();
+  if (!Rec) return null;
+  const r = new Rec();
+  r.lang = LANG_CODE[lang];
+  r.interimResults = true;
+  r.continuous = false;
+  r.maxAlternatives = 1;
+  let finalText = '', interim = '', err: string | null = null, done = false, stopped = false;
+  const finish = (res: ListenResult) => { if (done) return; done = true; clearTimeout(cap); onDone(res); };
+  r.onresult = (e) => {
+    interim = '';
+    for (let i = e.resultIndex; i < e.results.length; i++) {
+      const t = e.results[i][0]?.transcript ?? '';
+      if (e.results[i].isFinal) finalText += t; else interim += t;
+    }
+    onInterim((finalText + ' ' + interim).trim());
+  };
+  r.onerror = (e) => { err = e.error; };
+  r.onend = () => {
+    const text = (finalText || interim).trim(); // a manual stop can leave the last words as interim
+    if (text) return finish({ text });
+    if (err === 'not-allowed') return finish({ text: null, error: 'mic-blocked' });
+    if (err && FALLBACK_ERRORS.has(err)) return finish({ text: null, error: 'fallback', detail: err });
+    if (err === 'aborted' && !stopped) return finish({ text: null, error: 'fallback', detail: err });
+    finish({ text: null, error: 'no-speech' });
+  };
+  const cap = setTimeout(() => { stopped = true; try { r.stop(); } catch { /* already ended */ } }, 15000);
+  try { r.start(); } catch { clearTimeout(cap); return null; }
+  return { stop: () => { stopped = true; try { r.stop(); } catch { /* already ended */ } } };
 }

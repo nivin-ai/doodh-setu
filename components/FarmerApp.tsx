@@ -10,7 +10,7 @@ import { DEMO_DATES } from '@/lib/demo';
 import { LANGS, PHRASES, SIGNAL_NEED, SIGNAL_TITLE, signalMessage, t, type Lang } from '@/lib/i18n';
 import { dayTotals, explainChange, monthKeysUpTo, monthSummary, worthToFarmer, type MonthSummary } from '@/lib/farmer';
 import { answer } from '@/lib/ask';
-import { recordWav, speak, stopSpeaking, transcribe, type Recorder } from '@/lib/voice';
+import { listenInBrowser, recordWav, speak, stopSpeaking, transcribe, voiceHealth, type Recorder } from '@/lib/voice';
 import { buildContext } from '@/lib/askContext';
 import { NOTICE_VERSION, CATEGORIES, fin } from '@/lib/finance';
 import { fmtMonth, inr, MONTHS } from '@/lib/util';
@@ -637,6 +637,7 @@ function Ask() {
   const [follow, setFollow] = useState<Record<string, string>>({});
   const [mic, setMic] = useState<'idle' | 'listening' | 'transcribing'>('idle');
   const [micErr, setMicErr] = useState<string | null>(null);
+  const [live, setLive] = useState(''); // words recognised so far, shown while listening
   const rec = useRef<Recorder | null>(null);
   useEffect(() => () => rec.current?.stop(), []);
   useEffect(() => {
@@ -657,11 +658,12 @@ function Ask() {
     setAns(a); setState('idle');
   };
 
-  // Voice question: record (stops on 1.8 s of silence, a second tap, or 15 s), transcribe with Gemini, then ask
-  const tapMic = async () => {
-    if (mic === 'listening') { rec.current?.stop(); return; }
-    if (mic !== 'idle' || state === 'working') return;
-    stopSpeaking(); setMicErr(null);
+  // Voice question. First choice: the browser's own speech recognition (free, words appear live,
+  // ends when the farmer pauses). Fallback where the browser has none or it fails: record
+  // (stops on 1.8 s of silence, a second tap, or 15 s) and transcribe on the server with Gemini.
+  const recordAndTranscribe = async () => {
+    const h = await voiceHealth();
+    if (!h.stt) { setMic('idle'); setMicErr(T('notHeard')); return; }
     try {
       rec.current = await recordWav(async (wav) => {
         rec.current = null;
@@ -673,6 +675,21 @@ function Ask() {
       });
       setMic('listening');
     } catch { setMic('idle'); setMicErr(T('micBlocked')); }
+  };
+  const tapMic = async () => {
+    if (mic === 'listening') { rec.current?.stop(); return; }
+    if (mic !== 'idle' || state === 'working') return;
+    stopSpeaking(); setMicErr(null); setLive('');
+    const browser = listenInBrowser(lang, setLive, (r) => {
+      rec.current = null;
+      if (r.text !== null) { setMic('idle'); setLive(''); run(r.text); return; }
+      setLive('');
+      if (r.error === 'mic-blocked') { setMic('idle'); setMicErr(T('micBlocked')); return; }
+      if (r.error === 'fallback') { void recordAndTranscribe(); return; }
+      setMic('idle'); setMicErr(T('notHeard'));
+    });
+    if (browser) { rec.current = browser; setMic('listening'); return; }
+    await recordAndTranscribe();
   };
 
   const full = ans ? [ans.text, ...(ans.bullets ?? [])].join('. ') : '';
@@ -735,6 +752,7 @@ function Ask() {
           <IconMic size={34} className="relative" />
         </button>
         <div className="text-[15px] font-semibold text-muted" aria-live="polite">{mic === 'listening' ? T('listening') : mic === 'transcribing' ? T('thinking') : T('tapSpeak')}</div>
+        {mic === 'listening' && live ? <div className="max-w-[340px] animate-view-in rounded-xl bg-fill px-3 py-2 text-center italic">“{live}”</div> : null}
         {micErr ? <div className="max-w-[320px] text-center text-sm text-warn">{micErr}</div> : null}
       </div>
       <form className="flex gap-2 pt-2" onSubmit={(e) => { e.preventDefault(); if (q.trim() && state !== 'working') { run(q.trim()); setQ(''); } }}>
