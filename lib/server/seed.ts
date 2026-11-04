@@ -213,6 +213,9 @@ export async function resetDemoWorkflow(tx: Tx) {
   await tx.query(`delete from audit_events where cooperative_id in (select cooperative_id from cooperatives where is_synthetic) or farmer_id in (${synthFarmers})
     or society_id in (select society_id from societies where is_synthetic) or lender_id in (select lender_id from lenders where is_synthetic)`);
   await tx.query(`update farmers set correction_requested_at = null where is_synthetic and correction_requested_at is not null`);
+  // loan products the demo lenders created on the lender desk during a demo (never the seeded ones)
+  await tx.query(`delete from loan_products p where not p.is_synthetic and p.lender_id in (select lender_id from lenders where is_synthetic)
+    and not exists (select 1 from loan_applications a where a.loan_product_id = p.loan_product_id)`);
   await seedBackgroundCases(tx);
   // next application reference continues after the highest one left (DF-10024 after a clean reset)
   await tx.query(`select setval('loan_application_ref_seq', greatest(10023, coalesce((select max(substring(application_reference from 4)::int) from loan_applications where application_reference ~ '^DF-[0-9]+$'), 0)))`);

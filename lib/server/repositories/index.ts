@@ -214,9 +214,15 @@ export async function lenderByName(tx: Tx, name: string) {
 }
 export async function listLoanProducts(tx: Tx): Promise<LoanProduct[]> {
   const rows = await tx.query<Record<string, unknown>>(`select p.product_code, p.product_name, p.purpose, p.min_amount, p.max_amount, p.interest_rate, p.max_tenure_months, p.fee_pct, p.eligibility,
-      l.lender_name, l.lender_id::text lender_id from loan_products p join lenders l on l.lender_id = p.lender_id order by p.product_code`);
+      p.is_synthetic, p.created_at, l.lender_name, l.lender_id::text lender_id from loan_products p join lenders l on l.lender_id = p.lender_id order by p.is_synthetic desc, p.created_at, p.product_code`);
   return rows.map((r) => ({ id: String(r.product_code), lender: String(r.lender_name), lenderId: String(r.lender_id), name: String(r.product_name), purpose: String(r.purpose),
-    min: n0(r.min_amount), max: n0(r.max_amount), rate: n0(r.interest_rate), maxTenure: n0(r.max_tenure_months), feePct: n0(r.fee_pct), elig: String(r.eligibility ?? '') }));
+    min: n0(r.min_amount), max: n0(r.max_amount), rate: n0(r.interest_rate), maxTenure: n0(r.max_tenure_months), feePct: n0(r.fee_pct), elig: String(r.eligibility ?? ''),
+    createdByLender: !r.is_synthetic, createdAt: r.created_at ? iso(r.created_at) : undefined }));
+}
+// Applications per product for one lender (row-level security limits it to that lender's applications)
+export async function productApplicationCounts(tx: Tx) {
+  const rows = await tx.query<{ code: string; n: number }>(`select p.product_code code, count(*)::int n from loan_applications a join loan_products p on p.loan_product_id = a.loan_product_id group by 1`);
+  return new Map(rows.map((r) => [r.code, r.n]));
 }
 export async function getKyc(tx: Tx, farmerId: string): Promise<KycRecord[]> {
   return (await tx.query<Record<string, unknown>>('select document_type, document_number_masked, verification_status, verification_provider from farmer_kyc where farmer_id = $1 order by document_type', [farmerId]))

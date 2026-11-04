@@ -206,14 +206,72 @@ function DossierCard({ c }: { c: LenderCase }) {
   );
 }
 
+const PURPOSE_LABEL: Record<string, string> = { cattle: 'Buy milch animals', feed: 'Feed and fodder', equipment: 'Dairy equipment', shed: 'Cattle shed construction', working_capital: 'Working capital', other: 'Other' };
+const emi = (p: number, annual: number, n: number) => { const r = annual / 1200; return r === 0 ? p / n : (p * r * Math.pow(1 + r, n)) / (Math.pow(1 + r, n) - 1); };
+const BLANK = { name: '', purpose: 'cattle', min: '25000', max: '150000', rate: '11', maxTenure: '36', feePct: '1', elig: 'Society member for 12+ months with regular milk supply' };
+
 function Products({ d }: { d: LenderData }) {
+  const [open, setOpen] = useState(false);
+  const [f, setF] = useState(BLANK);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState('');
+  const [done, setDone] = useState('');
+  const set = (k: keyof typeof BLANK) => (e: { target: { value: string } }) => setF({ ...f, [k]: e.target.value });
+  const n = { min: Number(f.min), max: Number(f.max), rate: Number(f.rate), tenure: Number(f.maxTenure), fee: Number(f.feePct) };
+  const ok = f.name.trim().length >= 3 && n.min >= 1000 && n.max > n.min && n.max <= 5000000 && n.rate > 0 && n.rate <= 36 && n.tenure >= 3 && n.tenure <= 120 && n.fee >= 0 && n.fee <= 10 && !!f.elig.trim();
+  const example = ok ? Math.min(Math.max(50000, n.min), n.max) : 0;
+  const save = async () => {
+    setBusy(true); setErr('');
+    try {
+      await postJson('/api/lender', { action: 'createProduct', product: { name: f.name, purpose: f.purpose, min: n.min, max: n.max, rate: n.rate, maxTenure: n.tenure, feePct: n.fee, elig: f.elig } });
+      setDone(f.name.trim()); setF(BLANK); setOpen(false);
+    } catch (e) { setErr(e instanceof Error ? e.message : String(e)); } finally { setBusy(false); }
+  };
+  const remove = async (code: string, name: string) => {
+    if (!window.confirm(`Remove "${name}"? Farmers will no longer see it.`)) return;
+    try { await postJson('/api/lender', { action: 'removeProduct', code }); setDone(''); } catch (e) { setErr(e instanceof Error ? e.message : String(e)); }
+  };
+  const input = 'input mt-1 !min-h-[40px] !py-1.5';
+  const field = (label: string, el: React.ReactNode, hint?: string) => <label className="flex flex-col text-sm font-semibold">{label}{el}{hint ? <span className="mt-0.5 text-xs font-normal text-muted">{hint}</span> : null}</label>;
   return (
     <div>
-      <PageTitle title="Product catalogue" sub="Products shown to farmers with a source date and a demo label (BR-19)." />
-      <table className="tbl card w-full overflow-hidden">
-        <thead><tr><th>Product</th><th>Purpose</th><th>Range</th><th>Rate</th><th>Tenure</th><th>Fees</th><th>Effective</th><th>Label</th></tr></thead>
-        <tbody>{d.products.map((p) => <tr key={p.id}><td>{p.name}</td><td>{p.purpose === 'cattle' ? 'Buy milch animals' : p.purpose}</td><td>{inr(p.min)} - {inr(p.max)}</td><td>{p.rate}%</td><td>Up to {p.maxTenure} months</td><td>{p.feePct}%</td><td>31 Oct 2026</td><td><Chip tone="warn">Demo offer</Chip></td></tr>)}</tbody>
-      </table>
+      <PageTitle title="Product catalogue" sub="Products shown to farmers in the Finance section, with a source date and a demo label (BR-19)." />
+      <div className="mb-3 flex flex-wrap items-center gap-3">
+        {!open ? <button className="btn-primary" onClick={() => { setOpen(true); setDone(''); setErr(''); }}>+ New product</button> : null}
+        {done ? <span className="text-sm text-good">“{done}” is live. Farmers see it under Finance, compare loan options.</span> : null}
+      </div>
+      {open ? (
+        <div className="card mb-4 p-4">
+          <div className="label">New loan product</div>
+          <div className="mt-3 grid gap-3 md:grid-cols-2">
+            {field('Product name', <input className={input} value={f.name} onChange={set('name')} placeholder="e.g. Cattle shed loan" maxLength={80} />)}
+            {field('Purpose', <select className={input} value={f.purpose} onChange={set('purpose')}>{Object.entries(PURPOSE_LABEL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select>)}
+            {field('Minimum amount (₹)', <input className={input} type="number" inputMode="numeric" min={1000} step={1000} value={f.min} onChange={set('min')} />)}
+            {field('Maximum amount (₹)', <input className={input} type="number" inputMode="numeric" min={1000} step={1000} value={f.max} onChange={set('max')} />, 'Up to ₹50,00,000')}
+            {field('Interest rate (% a year)', <input className={input} type="number" inputMode="decimal" min={0} max={36} step={0.05} value={f.rate} onChange={set('rate')} />)}
+            {field('Maximum tenure (months)', <input className={input} type="number" inputMode="numeric" min={3} max={120} value={f.maxTenure} onChange={set('maxTenure')} />)}
+            {field('Processing fee (% of loan)', <input className={input} type="number" inputMode="decimal" min={0} max={10} step={0.25} value={f.feePct} onChange={set('feePct')} />)}
+            {field('Who is eligible', <input className={input} value={f.elig} onChange={set('elig')} maxLength={300} />, 'Shown to farmers before they apply')}
+          </div>
+          <div className="mt-3 rounded-xl bg-fill px-3 py-2 text-sm">
+            {ok ? <>Farmers will see: {inr(n.min)} to {inr(n.max)} at {n.rate}% for up to {n.tenure} months. Example: {inr(example)} over {n.tenure} months is an EMI of <b>{inr(Math.round(emi(example, n.rate, n.tenure)))}</b>, plus a {inr(Math.round((example * n.fee) / 100))} fee.</>
+              : <span className="text-muted">Fill in every field. The maximum must be more than the minimum, the rate 0 to 36%, tenure 3 to 120 months and the fee 0 to 10%.</span>}
+          </div>
+          {err ? <p role="alert" className="mt-2 text-sm text-bad">{err}</p> : null}
+          <div className="mt-3 flex gap-2">
+            <button className="btn-primary" disabled={!ok || busy} onClick={save}>{busy ? 'Publishing...' : 'Publish to farmers'}</button>
+            <button className="btn-secondary" disabled={busy} onClick={() => { setOpen(false); setErr(''); }}>Cancel</button>
+          </div>
+        </div>
+      ) : err ? <p role="alert" className="mb-3 text-sm text-bad">{err}</p> : null}
+      <div className="card overflow-x-auto">
+        <table className="tbl w-full min-w-[900px]">
+          <thead><tr><th>Product</th><th>Purpose</th><th>Range</th><th>Rate</th><th>Tenure</th><th>Fees</th><th>Applications</th><th>Effective</th><th>Label</th><th></th></tr></thead>
+          <tbody>{d.products.map((p) => <tr key={p.id}><td className="font-semibold">{p.name}<div className="text-xs font-normal text-muted">{p.elig}</div></td><td>{PURPOSE_LABEL[p.purpose] ?? p.purpose}</td><td className="whitespace-nowrap">{inr(p.min)} - {inr(p.max)}</td><td>{p.rate}%</td><td className="whitespace-nowrap">Up to {p.maxTenure} months</td><td>{p.feePct}%</td><td className="num">{p.applications ?? 0}</td>
+            <td className="whitespace-nowrap">{p.createdByLender && p.createdAt ? fmtDate(p.createdAt.slice(0, 10)) : '31 Oct 2026'}</td><td>{p.createdByLender ? <Chip tone="primary">Added by bank</Chip> : <Chip tone="warn">Demo offer</Chip>}</td>
+            <td>{p.createdByLender && !p.applications ? <button className="text-sm font-semibold text-bad hover:underline" onClick={() => remove(p.id, p.name)}>Remove</button> : null}</td></tr>)}</tbody>
+        </table>
+      </div>
     </div>
   );
 }
@@ -223,7 +281,7 @@ function Audit({ d }: { d: LenderData }) {
   return (
     <div>
       <PageTitle title="Audit trail" sub="Consent, access and status events." />
-      <div className="card p-4"><ul className="divide-y divide-[#E6EDF5] text-[13px]">{s.audit.filter((x) => /consent|application|DF-|Requested|Uploaded|Set /.test(x.action)).map((x, i) => <li key={i} className="grid grid-cols-[150px_1fr] gap-3 py-1.5"><span className="num text-muted">{new Date(x.at).toLocaleString('en-IN')}</span><span><b className="font-semibold">{x.actor}</b>: {x.action}</span></li>)}</ul>
+      <div className="card p-4"><ul className="divide-y divide-[#E6EDF5] text-[13px]">{s.audit.filter((x) => /consent|application|DF-|Requested|Uploaded|Set |loan product/.test(x.action)).map((x, i) => <li key={i} className="grid grid-cols-[150px_1fr] gap-3 py-1.5"><span className="num text-muted">{new Date(x.at).toLocaleString('en-IN')}</span><span><b className="font-semibold">{x.actor}</b>: {x.action}</span></li>)}</ul>
         {s.audit.length === 0 ? <p className="text-muted">No events yet.</p> : null}</div>
     </div>
   );

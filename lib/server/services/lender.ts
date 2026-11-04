@@ -23,7 +23,10 @@ export async function getLenderData(scope: Scope): Promise<LenderData> {
         farmer: r.farmer_code ? `Member ${String(r.farmer_code)}` : 'Member (no consent to identify)',
         societyId: (r.society_id as string) ?? null,
       })),
-      products: (await R.listLoanProducts(tx)).filter((p) => p.lenderId === lid),
+      products: await (async () => {
+        const counts = await R.productApplicationCounts(tx);
+        return (await R.listLoanProducts(tx)).filter((p) => p.lenderId === lid).map((p) => ({ ...p, applications: counts.get(p.id) ?? 0 }));
+      })(),
       audit: await R.listAudit(tx),
     };
   });
@@ -101,7 +104,56 @@ export async function getLenderCase(scope: Scope, id: string, asOf: string, opts
   return out;
 }
 
+export const PRODUCT_PURPOSES = ['cattle', 'feed', 'equipment', 'shed', 'working_capital', 'other'] as const;
+
+// New loan products from the lender desk. The database lets lenders read products but not write
+// them (supabase/migrations/0003_access_control.sql), so the server writes with its own rights after
+// checking the signed-in lender here: the product always belongs to that lender, and a lender can
+// remove only its own desk-created products that no farmer has applied for.
+async function productAction(scope: Scope, body: Record<string, unknown>) {
+  if (scope.role !== 'lender' || !scope.lenderId) throw new DbError('Only a lender can manage products', 403);
+  const lid = scope.lenderId;
+  if (body.action === 'removeProduct') {
+    const code = String(body.code ?? '').slice(0, 20);
+    return asSystem(async (tx) => {
+      const rows = await tx.query<{ name: string }>(`delete from loan_products p where p.product_code = $1 and p.lender_id = $2 and not p.is_synthetic
+        and not exists (select 1 from loan_applications a where a.loan_product_id = p.loan_product_id) returning product_name name`, [code, lid]);
+      if (!rows.length) throw new DbError('This product cannot be removed (it is not yours, came with the demo, or farmers have applied for it)', 409);
+      await R.audit(tx, { actor: scope.actor, role: 'lender', action: `Removed loan product ${rows[0].name} (${code})`, lenderId: lid, entityType: 'loan_product' });
+      return { ok: true };
+    });
+  }
+  const p = (body.product ?? {}) as Record<string, unknown>;
+  const name = String(p.name ?? '').trim().replace(/\s+/g, ' ');
+  const purpose = String(p.purpose ?? '');
+  const min = Math.round(Number(p.min)), max = Math.round(Number(p.max));
+  const rate = Math.round(Number(p.rate) * 100) / 100, tenure = Math.round(Number(p.maxTenure)), fee = Math.round(Number(p.feePct) * 100) / 100;
+  const elig = String(p.elig ?? '').trim().replace(/\s+/g, ' ').slice(0, 300);
+  const problems = [
+    name.length < 3 || name.length > 80 ? 'Product name must be 3 to 80 characters' : '',
+    !(PRODUCT_PURPOSES as readonly string[]).includes(purpose) ? 'Choose a purpose' : '',
+    !(min >= 1000) ? 'Minimum amount must be at least ₹1,000' : '',
+    !(max <= 5000000) ? 'Maximum amount can be at most ₹50,00,000' : '',
+    !(max > min) ? 'Maximum amount must be more than the minimum' : '',
+    !(rate > 0 && rate <= 36) ? 'Interest rate must be between 0 and 36% a year' : '',
+    !(tenure >= 3 && tenure <= 120) ? 'Tenure must be 3 to 120 months' : '',
+    !(fee >= 0 && fee <= 10) ? 'Processing fee must be 0 to 10%' : '',
+    !elig ? 'Add who is eligible' : '',
+  ].filter(Boolean);
+  if (problems.length) throw new DbError(problems.join('. '), 400);
+  return asSystem(async (tx) => {
+    const dup = await tx.query('select 1 from loan_products where lender_id = $1 and lower(product_name) = lower($2)', [lid, name]);
+    if (dup.length) throw new DbError('You already have a product with this name', 409);
+    const code = 'P' + Date.now().toString(36).toUpperCase() + Math.floor(Math.random() * 36).toString(36).toUpperCase();
+    await tx.query(`insert into loan_products (lender_id, product_code, product_name, purpose, min_amount, max_amount, interest_rate, max_tenure_months, fee_pct, eligibility, is_synthetic)
+      values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,false)`, [lid, code, name, purpose, min, max, rate, tenure, fee, elig]);
+    await R.audit(tx, { actor: scope.actor, role: 'lender', action: `Created loan product ${name} (${code}): ₹${min}-₹${max}, ${rate}%, up to ${tenure} months`, lenderId: lid, entityType: 'loan_product' });
+    return { ok: true, code };
+  });
+}
+
 export async function lenderAction(scope: Scope, body: Record<string, unknown>) {
+  if (body.action === 'createProduct' || body.action === 'removeProduct') return productAction(scope, body);
   return withScope(scope, async (tx) => {
     const id = String(body.id ?? '');
     const { app } = await R.getApplication(tx, id);

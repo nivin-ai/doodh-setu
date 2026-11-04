@@ -13,7 +13,7 @@ import { answer } from '@/lib/ask';
 import { listenInBrowser, recordWav, speak, stopSpeaking, transcribe, voiceHealth, type Recorder } from '@/lib/voice';
 import { buildContext } from '@/lib/askContext';
 import { NOTICE_VERSION, CATEGORIES, fin } from '@/lib/finance';
-import { fmtMonth, inr, MONTHS } from '@/lib/util';
+import { fmtDate, fmtMonth, inr, MONTHS } from '@/lib/util';
 import { Chip, Count, PlayButton, Segmented, CHART } from './ui';
 import { IconBack, IconBank, IconCheck, IconChevron, IconChat, IconHome, IconMic, IconNotice, IconPhone, IconRupee, IconSend, IconUser } from './icons';
 
@@ -483,7 +483,7 @@ function Products() {
               <span className="text-muted">{T('emi')}</span><span className="font-bold">{inr(Math.round(e))} × {n}</span>
               <span className="text-muted">{T('total')}</span><span>{inr(Math.round(e * n + fee))}</span>
             </div>
-            <div className="mt-1 text-xs text-muted">{T('eligibility')}: {p.elig}, source date 31 Oct 2026 (demo)</div>
+            <div className="mt-1 text-xs text-muted">{T('eligibility')}: {p.elig}, source date {p.createdByLender && p.createdAt ? fmtDate(p.createdAt.slice(0, 10)) : '31 Oct 2026'} (demo)</div>
             <button className="btn-secondary mt-3 w-full" onClick={() => { setLoan({ ...loan, product: p.id, amount: amt, tenure: n, rate: p.rate }); setSub('consent'); }}>{T('startApp')}</button>
           </div>
         );

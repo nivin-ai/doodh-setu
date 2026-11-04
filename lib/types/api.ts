@@ -26,7 +26,7 @@ export interface Application {
   consentCode: string | null;
   sharing: SharingLog[];
 }
-export interface LoanProduct { id: string; lender: string; lenderId: string; name: string; purpose: string; min: number; max: number; rate: number; maxTenure: number; feePct: number; elig: string }
+export interface LoanProduct { id: string; lender: string; lenderId: string; name: string; purpose: string; min: number; max: number; rate: number; maxTenure: number; feePct: number; elig: string; createdByLender?: boolean; createdAt?: string; applications?: number }
 export interface KycRecord { type: string; masked: string; status: string; provider: string }
 export interface PropertyRecord { ownership: string; survey: string; village: string; district: string; state: string; area: number; unit: string; use: string; record: string; status: string }
 export interface CreditRecord { bureau: string; score: number; loans: number; outstanding: number; mock: boolean }
